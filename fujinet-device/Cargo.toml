@@ -1,0 +1,12 @@
+[package]
+name = "fujinet-device"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+description = "Device implementations for FujiNet HAL"
+license.workspace = true
+
+[dependencies]
+fujinet-core = { path = "../fujinet-core" }
+tokio = { workspace = true }
+log = { workspace = true }

@@ -1,0 +1,13 @@
+[package]
+name = "fujinet-platform"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+description = "Platform-specific implementations for FujiNet HAL, e.g. Raspberry Pi, x86, ESP32, etc."
+license.workspace = true
+
+[dependencies]
+fujinet-core = { path = "../fujinet-core" }
+fujinet-device = { path = "../fujinet-device" }
+tokio = { workspace = true }
+log = { workspace = true }

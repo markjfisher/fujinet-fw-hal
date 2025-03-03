@@ -1,0 +1,13 @@
+[package]
+name = "fujinet-host"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+description = "Host translation layer for FujiNet HAL"
+license.workspace = true
+
+[dependencies]
+fujinet-core = { path = "../fujinet-core" }
+fujinet-platform = { path = "../fujinet-platform" }
+tokio = { workspace = true }
+log = { workspace = true }

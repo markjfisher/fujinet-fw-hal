@@ -1,0 +1,22 @@
+[workspace]
+resolver = "2"
+members = [
+    "fujinet-core",
+    "fujinet-device",
+    "fujinet-platform",
+    "fujinet-host",
+    "fujinet-common",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["FujiNet Community"]
+description = "Hardware Abstraction Layer for FujiNet Firmware"
+license = "MIT"
+
+[workspace.dependencies]
+tokio = { version = "1.36", features = ["full"] }
+thiserror = "2.0.12"
+async-trait = "0.1"
+log = "0.4"
