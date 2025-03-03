@@ -186,4 +186,32 @@ pub extern "C" fn fuji_host_translator_process_host_data(
             FujiError::InvalidParameter
         }
     }
+}
+
+#[no_mangle]
+pub extern "C" fn fuji_host_translator_process_device_data(
+    translator: *mut FujiHostTranslator,
+    data: *const u8,
+    len: size_t,
+    output: *mut *mut u8,
+    output_len: *mut size_t,
+) -> FujiError {
+    unsafe {
+        if let Some(translator) = translator.cast::<Box<dyn HostTranslator>>().as_mut() {
+            let data = std::slice::from_raw_parts(data, len);
+            let rt = Runtime::new().unwrap();
+            match rt.block_on(translator.process_device_data(data)) {
+                Ok(result) => {
+                    let boxed = result.into_boxed_slice();
+                    *output = boxed.as_ptr() as *mut u8;
+                    *output_len = boxed.len() as size_t;
+                    std::mem::forget(boxed);
+                    FujiError::Ok
+                }
+                Err(e) => e.into(),
+            }
+        } else {
+            FujiError::InvalidParameter
+        }
+    }
 } 

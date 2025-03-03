@@ -42,6 +42,13 @@ FujiError fuji_host_translator_process_host_data(
     uint8_t** output,
     size_t* output_len
 );
+FujiError fuji_host_translator_process_device_data(
+    FujiHostTranslator* translator,
+    const uint8_t* data,
+    size_t len,
+    uint8_t** output,
+    size_t* output_len
+);
 
 #ifdef __cplusplus
 }
