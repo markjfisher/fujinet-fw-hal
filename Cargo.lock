@@ -90,6 +90,7 @@ dependencies = [
 name = "fujinet-device"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
  "fujinet-core",
  "log",
  "tokio",

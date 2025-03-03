@@ -1,7 +1,7 @@
 [package]
 name = "fujinet-device"
-version.workspace = true
-edition.workspace = true
+version = "0.1.0"
+edition = "2021"
 authors.workspace = true
 description = "Device implementations for FujiNet HAL"
 license.workspace = true
@@ -10,3 +10,4 @@ license.workspace = true
 fujinet-core = { path = "../fujinet-core" }
 tokio = { workspace = true }
 log = { workspace = true }
+async-trait = "0.1.77"

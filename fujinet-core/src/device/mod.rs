@@ -1,11 +1,11 @@
 use async_trait::async_trait;
 use crate::error::DeviceResult;
-use crate::device::status::DeviceStatus;
 
 pub mod status;
 pub mod network;
 
 pub use network::NetworkDevice;
+pub use status::DeviceStatus;
 
 #[async_trait]
 pub trait Device: Send + Sync {
