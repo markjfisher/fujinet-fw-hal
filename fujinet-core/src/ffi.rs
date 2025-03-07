@@ -5,6 +5,7 @@ use crate::device::Device;
 use crate::platform::Platform;
 use crate::host::HostTranslator;
 use tokio::runtime::Runtime;
+use std::borrow::Cow;
 
 // Opaque types for C
 pub type FujiDevice = c_void;
@@ -174,10 +175,13 @@ pub extern "C" fn fuji_host_translator_process_host_data(
             let rt = Runtime::new().unwrap();
             match rt.block_on(translator.process_host_data(data)) {
                 Ok(result) => {
-                    let boxed = result.into_boxed_slice();
-                    *output = boxed.as_ptr() as *mut u8;
-                    *output_len = boxed.len() as size_t;
-                    std::mem::forget(boxed);
+                    let vec = match result {
+                        Cow::Borrowed(slice) => Vec::from(slice),
+                        Cow::Owned(vec) => vec,
+                    };
+                    *output = vec.as_ptr() as *mut u8;
+                    *output_len = vec.len() as size_t;
+                    std::mem::forget(vec);
                     FujiError::Ok
                 }
                 Err(e) => e.into(),
@@ -202,10 +206,13 @@ pub extern "C" fn fuji_host_translator_process_device_data(
             let rt = Runtime::new().unwrap();
             match rt.block_on(translator.process_device_data(data)) {
                 Ok(result) => {
-                    let boxed = result.into_boxed_slice();
-                    *output = boxed.as_ptr() as *mut u8;
-                    *output_len = boxed.len() as size_t;
-                    std::mem::forget(boxed);
+                    let vec = match result {
+                        Cow::Borrowed(slice) => Vec::from(slice),
+                        Cow::Owned(vec) => vec,
+                    };
+                    *output = vec.as_ptr() as *mut u8;
+                    *output_len = vec.len() as size_t;
+                    std::mem::forget(vec);
                     FujiError::Ok
                 }
                 Err(e) => e.into(),
