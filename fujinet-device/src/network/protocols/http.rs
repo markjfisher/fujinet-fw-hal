@@ -80,6 +80,9 @@ impl ProtocolHandler for HttpProtocol {
     }
 
     async fn close(&mut self) -> DeviceResult<()> {
+        if self.status != ConnectionStatus::Connected {
+            return Err(DeviceError::NotReady);
+        }
         self.status = ConnectionStatus::Disconnected;
         self.request = None;
         self.response = None;
@@ -109,6 +112,7 @@ impl ProtocolHandler for HttpProtocol {
     }
 
     async fn write(&mut self, buf: &[u8]) -> DeviceResult<usize> {
+        println!("Protocol status: {:?}", self.status);
         if self.status != ConnectionStatus::Connected {
             return Err(DeviceError::NotReady);
         }

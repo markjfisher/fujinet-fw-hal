@@ -1,4 +1,4 @@
-mod protocols;
+pub mod protocols;
 
 use fujinet_core::device::Device;
 use fujinet_core::device::DeviceStatus;
@@ -6,6 +6,7 @@ use fujinet_core::error::DeviceResult;
 use async_trait::async_trait;
 
 pub use protocols::{Protocol, ProtocolHandler, ConnectionStatus};
+pub use protocols::http::HttpProtocol;
 
 pub struct NetworkDevice {
     endpoint: String,
@@ -48,12 +49,12 @@ impl Device for NetworkDevice {
         self.protocol.write(buf).await
     }
 
-    async fn read_block(&mut self, block: u32, buf: &mut [u8]) -> DeviceResult<usize> {
+    async fn read_block(&mut self, _block: u32, buf: &mut [u8]) -> DeviceResult<usize> {
         // For network devices, we'll treat blocks as direct reads
         self.protocol.read(buf).await
     }
 
-    async fn write_block(&mut self, block: u32, buf: &[u8]) -> DeviceResult<usize> {
+    async fn write_block(&mut self, _block: u32, buf: &[u8]) -> DeviceResult<usize> {
         // For network devices, we'll treat blocks as direct writes
         self.protocol.write(buf).await
     }
