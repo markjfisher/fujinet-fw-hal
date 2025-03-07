@@ -16,21 +16,23 @@ pub type FujiHostTranslator = c_void;
 #[repr(C)]
 pub enum FujiError {
     Ok = 0,
-    Io = 1,
+    IoError = 1,
     NotReady = 2,
     NotSupported = 3,
     InvalidParameter = 4,
     ConnectionError = 5,
+    InvalidProtocol = 6,
 }
 
 impl From<DeviceError> for FujiError {
     fn from(err: DeviceError) -> Self {
         match err {
-            DeviceError::Io(_) => FujiError::Io,
+            DeviceError::Io(_) => FujiError::IoError,
             DeviceError::NotReady => FujiError::NotReady,
             DeviceError::NotSupported => FujiError::NotSupported,
             DeviceError::InvalidParameter(_) => FujiError::InvalidParameter,
             DeviceError::ConnectionError(_) => FujiError::ConnectionError,
+            DeviceError::InvalidProtocol => FujiError::InvalidProtocol,
         }
     }
 }

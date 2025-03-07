@@ -2,6 +2,8 @@ use async_trait::async_trait;
 use crate::error::DeviceResult;
 use crate::device::Device;
 
+pub mod network;
+
 #[async_trait]
 pub trait Platform: Send + Sync {
     /// Initializes the platform
