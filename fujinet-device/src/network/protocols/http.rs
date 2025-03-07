@@ -1,7 +1,25 @@
 use std::collections::HashMap;
 use fujinet_core::error::{DeviceError, DeviceResult};
-use super::{ProtocolHandler, ConnectionStatus};
+use super::{ProtocolHandler, ConnectionStatus, AnyProtocolHandler};
 use async_trait::async_trait;
+
+#[async_trait]
+pub trait HttpProtocolHandler: ProtocolHandler {
+    /// Send an HTTP request
+    async fn send_request(&mut self, method: String, url: String) -> DeviceResult<()>;
+    
+    /// Add a header to the current request
+    async fn add_header(&mut self, key: String, value: String) -> DeviceResult<()>;
+    
+    /// Get the status code of the last response
+    async fn get_status_code(&self) -> DeviceResult<Option<u16>>;
+    
+    /// Get the headers of the last response
+    async fn get_headers(&self) -> DeviceResult<HashMap<String, String>>;
+}
+
+#[async_trait]
+impl AnyProtocolHandler for HttpProtocol {}
 
 #[derive(Debug)]
 pub struct HttpRequest {
@@ -35,35 +53,6 @@ impl HttpProtocol {
             read_pos: 0,
             status: ConnectionStatus::Disconnected,
         }
-    }
-
-    pub fn set_request(&mut self, method: String, url: String) {
-        self.request = Some(HttpRequest {
-            method,
-            url,
-            headers: HashMap::new(),
-            body: Vec::new(),
-        });
-    }
-
-    pub fn add_header(&mut self, key: String, value: String) {
-        if let Some(req) = &mut self.request {
-            req.headers.insert(key, value);
-        }
-    }
-
-    pub fn set_body(&mut self, body: Vec<u8>) {
-        if let Some(req) = &mut self.request {
-            req.body = body;
-        }
-    }
-
-    pub fn get_status_code(&self) -> Option<u16> {
-        self.response.as_ref().map(|r| r.status_code)
-    }
-
-    pub fn get_headers(&self) -> HashMap<String, String> {
-        self.response.as_ref().map_or(HashMap::new(), |r| r.headers.clone())
     }
 }
 
@@ -112,7 +101,6 @@ impl ProtocolHandler for HttpProtocol {
     }
 
     async fn write(&mut self, buf: &[u8]) -> DeviceResult<usize> {
-        println!("Protocol status: {:?}", self.status);
         if self.status != ConnectionStatus::Connected {
             return Err(DeviceError::NotReady);
         }
@@ -136,9 +124,17 @@ impl ProtocolHandler for HttpProtocol {
             Ok(0)
         }
     }
+}
 
+#[async_trait]
+impl HttpProtocolHandler for HttpProtocol {
     async fn send_request(&mut self, method: String, url: String) -> DeviceResult<()> {
-        self.set_request(method, url);
+        self.request = Some(HttpRequest {
+            method,
+            url,
+            headers: HashMap::new(),
+            body: Vec::new(),
+        });
         // This will be implemented by the platform layer
         // For now, we'll simulate a successful request
         self.response = Some(HttpResponse {
@@ -148,4 +144,21 @@ impl ProtocolHandler for HttpProtocol {
         });
         Ok(())
     }
-} 
+
+    async fn add_header(&mut self, key: String, value: String) -> DeviceResult<()> {
+        if let Some(request) = &mut self.request {
+            request.headers.insert(key, value);
+            Ok(())
+        } else {
+            Err(DeviceError::NotReady)
+        }
+    }
+
+    async fn get_status_code(&self) -> DeviceResult<Option<u16>> {
+        Ok(self.response.as_ref().map(|r| r.status_code))
+    }
+
+    async fn get_headers(&self) -> DeviceResult<HashMap<String, String>> {
+        Ok(self.response.as_ref().map_or(HashMap::new(), |r| r.headers.clone()))
+    }
+}

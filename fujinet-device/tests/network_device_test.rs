@@ -2,14 +2,13 @@ use fujinet_device::network::NetworkDevice;
 use fujinet_device::network::protocols::http::HttpProtocol;
 use fujinet_core::device::Device;
 use fujinet_core::error::DeviceResult;
-use std::boxed::Box;
 
 #[tokio::test]
 async fn test_network_device_lifecycle() -> DeviceResult<()> {
     // Create a network device with HTTP protocol
     let mut device = NetworkDevice::new(
         "http://example.com".to_string(),
-        Box::new(HttpProtocol::new()),
+        HttpProtocol::new(),
     );
 
     // Test device name
@@ -59,7 +58,7 @@ async fn test_network_device_lifecycle() -> DeviceResult<()> {
 async fn test_network_device_http_request() -> DeviceResult<()> {
     let mut device = NetworkDevice::new(
         "http://example.com".to_string(),
-        Box::new(HttpProtocol::new()),
+        HttpProtocol::new(),
     );
 
     // Open the device
@@ -85,7 +84,7 @@ async fn test_network_device_http_request() -> DeviceResult<()> {
 async fn test_network_device_error_handling() -> DeviceResult<()> {
     let mut device = NetworkDevice::new(
         "http://example.com".to_string(),
-        Box::new(HttpProtocol::new()),
+        HttpProtocol::new(),
     );
 
     // Try to read before opening

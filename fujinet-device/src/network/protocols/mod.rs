@@ -18,7 +18,7 @@ impl Default for Protocol {
 }
 
 #[async_trait]
-pub trait ProtocolHandler: Send + Sync + Any {
+pub trait ProtocolHandler: Send + Sync {
     /// Open a connection to the endpoint
     async fn open(&mut self, endpoint: &str) -> DeviceResult<()>;
     
@@ -38,10 +38,9 @@ pub trait ProtocolHandler: Send + Sync + Any {
     
     /// Get the number of bytes available to read
     async fn available(&self) -> DeviceResult<usize>;
-
-    /// Send a request using the protocol
-    async fn send_request(&mut self, method: String, url: String) -> DeviceResult<()>;
 }
+
+pub trait AnyProtocolHandler: ProtocolHandler + Any {}
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum ConnectionStatus {
