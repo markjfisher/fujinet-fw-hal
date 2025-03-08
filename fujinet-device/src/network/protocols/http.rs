@@ -2,18 +2,18 @@ use std::collections::HashMap;
 use fujinet_core::error::{DeviceError, DeviceResult};
 use super::{ProtocolHandler, ConnectionStatus};
 use async_trait::async_trait;
-use fujinet_core::platform::network::NetworkDriver;
+use fujinet_core::platform::network::{NetworkDriver, HttpClient};
 
 #[async_trait]
 pub trait HttpProtocolHandler: ProtocolHandler {
     /// Send an HTTP request
-    async fn send_request(&mut self, method: String, url: String) -> DeviceResult<()>;
+    async fn send_request(&mut self, method: &str, url: &str, body: &[u8]) -> DeviceResult<()>;
     
     /// Add a header to the current request
-    async fn add_header(&mut self, key: String, value: String) -> DeviceResult<()>;
+    async fn add_header(&mut self, key: &str, value: &str) -> DeviceResult<()>;
     
     /// Get the status code of the last response
-    async fn get_status_code(&self) -> DeviceResult<Option<u16>>;
+    async fn get_status_code(&self) -> DeviceResult<u16>;
     
     /// Get the headers of the last response
     async fn get_headers(&self) -> DeviceResult<HashMap<String, String>>;
@@ -38,8 +38,7 @@ pub struct HttpProtocol {
     endpoint: String,
     status: ConnectionStatus,
     network_driver: Option<Box<dyn NetworkDriver>>,
-    request: Option<HttpRequest>,
-    response: Option<HttpResponse>,
+    http_client: Option<Box<dyn HttpClient>>,
 }
 
 impl Default for HttpProtocol {
@@ -48,8 +47,7 @@ impl Default for HttpProtocol {
             endpoint: String::new(),
             status: ConnectionStatus::Disconnected,
             network_driver: None,
-            request: None,
-            response: None,
+            http_client: None,
         }
     }
 }
@@ -62,44 +60,52 @@ impl HttpProtocol {
 
 #[async_trait]
 impl HttpProtocolHandler for HttpProtocol {
-    async fn send_request(&mut self, method: String, url: String) -> DeviceResult<()> {
-        self.request = Some(HttpRequest {
-            method,
-            url,
-            headers: HashMap::new(),
-            body: Vec::new(),
-        });
-        // This will be implemented by the platform layer
-        // For now, we'll simulate a successful request
-        self.response = Some(HttpResponse {
-            status_code: 200,
-            headers: HashMap::new(),
-            body: Vec::new(),
-        });
-        Ok(())
-    }
-
-    async fn add_header(&mut self, key: String, value: String) -> DeviceResult<()> {
-        if let Some(request) = &mut self.request {
-            request.headers.insert(key, value);
+    async fn send_request(&mut self, method: &str, url: &str, body: &[u8]) -> DeviceResult<()> {
+        if let Some(client) = &mut self.http_client {
+            match method.to_uppercase().as_str() {
+                "GET" => { client.get(url).await?; }
+                "POST" => { client.post(url, body).await?; }
+                "PUT" => { client.put(url, body).await?; }
+                "DELETE" => { client.delete(url).await?; }
+                "HEAD" => { client.head(url).await?; }
+                "PATCH" => { client.patch(url, body).await?; }
+                _ => return Err(DeviceError::InvalidOperation),
+            };
             Ok(())
         } else {
             Err(DeviceError::NotReady)
         }
     }
 
-    async fn get_status_code(&self) -> DeviceResult<Option<u16>> {
-        Ok(self.response.as_ref().map(|r| r.status_code))
+    async fn add_header(&mut self, key: &str, value: &str) -> DeviceResult<()> {
+        if let Some(client) = &mut self.http_client {
+            client.set_header(key, value).await
+        } else {
+            Err(DeviceError::NotReady)
+        }
+    }
+
+    async fn get_status_code(&self) -> DeviceResult<u16> {
+        if let Some(client) = &self.http_client {
+            client.get_status_code().await
+        } else {
+            Err(DeviceError::NotReady)
+        }
     }
 
     async fn get_headers(&self) -> DeviceResult<HashMap<String, String>> {
-        Ok(self.response.as_ref().map_or(HashMap::new(), |r| r.headers.clone()))
+        if let Some(client) = &self.http_client {
+            client.get_headers().await
+        } else {
+            Err(DeviceError::NotReady)
+        }
     }
 }
 
 #[async_trait]
 impl ProtocolHandler for HttpProtocol {
     fn set_network_driver(&mut self, driver: Box<dyn NetworkDriver>) {
+        // TODO: Determine how platforms will provide their HTTP clients
         self.network_driver = Some(driver);
     }
 
@@ -110,10 +116,6 @@ impl ProtocolHandler for HttpProtocol {
     async fn open(&mut self, endpoint: &str) -> DeviceResult<()> {
         self.endpoint = endpoint.to_string();
         self.status = ConnectionStatus::Connecting;
-        
-        if self.network_driver.is_none() {
-            return Err(DeviceError::NotReady);
-        }
         
         if let Some(driver) = &mut self.network_driver {
             driver.connect(endpoint).await?;
@@ -129,8 +131,8 @@ impl ProtocolHandler for HttpProtocol {
             return Err(DeviceError::NotReady);
         }
         
-        if let Some(conn) = &mut self.network_driver {
-            conn.disconnect().await?;
+        if let Some(driver) = &mut self.network_driver {
+            driver.disconnect().await?;
             self.status = ConnectionStatus::Disconnected;
             Ok(())
         } else {
@@ -139,16 +141,16 @@ impl ProtocolHandler for HttpProtocol {
     }
 
     async fn write(&mut self, buf: &[u8]) -> DeviceResult<usize> {
-        if let Some(conn) = &mut self.network_driver {
-            conn.write(buf).await
+        if let Some(driver) = &mut self.network_driver {
+            driver.write(buf).await
         } else {
             Err(DeviceError::NotReady)
         }
     }
 
     async fn read(&mut self, buf: &mut [u8]) -> DeviceResult<usize> {
-        if let Some(conn) = &mut self.network_driver {
-            conn.read(buf).await
+        if let Some(driver) = &mut self.network_driver {
+            driver.read(buf).await
         } else {
             Err(DeviceError::NotReady)
         }
@@ -159,8 +161,6 @@ impl ProtocolHandler for HttpProtocol {
     }
 
     async fn available(&self) -> DeviceResult<usize> {
-        // This would need platform support to check available bytes
         Ok(0)
     }
-
 }

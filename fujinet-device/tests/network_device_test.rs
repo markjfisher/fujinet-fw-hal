@@ -1,6 +1,6 @@
 use fujinet_core::error::DeviceResult;
 mod mock_platform;
-use mock_platform::create_network_device;  // Use mock platform's version
+use mock_platform::create_network_device;
 use crate::mock_platform::MockNetworkDriver;
 
 #[tokio::test]

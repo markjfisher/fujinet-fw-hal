@@ -14,6 +14,8 @@ pub enum DeviceError {
     ConnectionError(String),
     #[error("Invalid protocol")]
     InvalidProtocol,
+    #[error("Invalid operation")]
+    InvalidOperation,
 }
 
 pub type DeviceResult<T> = Result<T, DeviceError>; 
