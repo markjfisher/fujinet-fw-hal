@@ -1,9 +1,8 @@
 use std::ffi::c_void;
 use libc::size_t;
-use crate::error::DeviceError;
-use crate::device::Device;
-use crate::platform::Platform;
-use crate::host::HostTranslator;
+use fujinet_device::device::{Device, DeviceError};
+use fujinet_platform::Platform;
+use fujinet_host::HostTranslator;
 use tokio::runtime::Runtime;
 use std::borrow::Cow;
 
@@ -14,25 +13,23 @@ pub type FujiHostTranslator = c_void;
 
 // Error codes for C
 #[repr(C)]
+#[derive(Debug)]
 pub enum FujiError {
     Ok = 0,
     IoError = 1,
     NotReady = 2,
     NotSupported = 3,
     InvalidParameter = 4,
-    ConnectionError = 5,
-    InvalidProtocol = 6,
-    InvalidOperation = 7,
+    InvalidProtocol = 5,
+    InvalidOperation = 6,
 }
 
 impl From<DeviceError> for FujiError {
     fn from(err: DeviceError) -> Self {
         match err {
-            DeviceError::Io(_) => FujiError::IoError,
+            DeviceError::IoError(_) => FujiError::IoError,
             DeviceError::NotReady => FujiError::NotReady,
             DeviceError::NotSupported => FujiError::NotSupported,
-            DeviceError::InvalidParameter(_) => FujiError::InvalidParameter,
-            DeviceError::ConnectionError(_) => FujiError::ConnectionError,
             DeviceError::InvalidProtocol => FujiError::InvalidProtocol,
             DeviceError::InvalidOperation => FujiError::InvalidOperation,
         }

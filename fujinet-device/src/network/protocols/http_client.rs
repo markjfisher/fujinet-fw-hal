@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use crate::error::DeviceResult;
+use crate::device::DeviceResult;
 use std::any::Any;
 use std::collections::HashMap;
 
@@ -18,18 +18,4 @@ pub trait HttpClient: Send + Sync + Any {
     async fn set_header(&mut self, key: &str, value: &str) -> DeviceResult<()>;
     async fn get_status_code(&self) -> DeviceResult<u16>;
     async fn get_headers(&self) -> DeviceResult<HashMap<String, String>>;
-}
-
-/// Creates a platform-specific HTTP client
-pub fn create_http_client() -> DeviceResult<Box<dyn HttpClient>> {
-    // For now, return a mock client
-    #[cfg(test)]
-    {
-        use crate::tests::mocks::MockHttpClient;
-        Ok(Box::new(MockHttpClient::new()))
-    }
-    #[cfg(not(test))]
-    {
-        Err(crate::error::DeviceError::NotSupported)
-    }
 } 

@@ -3,11 +3,14 @@ name = "fujinet-host"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
-description = "Host translation layer for FujiNet HAL"
+description = "Host-specific implementations for FujiNet HAL"
 license.workspace = true
 
+[lib]
+path = "src/mod.rs"
+
 [dependencies]
-fujinet-core = { path = "../fujinet-core" }
-fujinet-platform = { path = "../fujinet-platform" }
+async-trait = { workspace = true }
+fujinet-device = { path = "../fujinet-device" }
 tokio = { workspace = true }
 log = { workspace = true }

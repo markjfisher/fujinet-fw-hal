@@ -1,8 +1,7 @@
 use std::collections::HashMap;
-use fujinet_core::error::{DeviceError, DeviceResult};
-use super::{ProtocolHandler, ConnectionStatus};
+use crate::device::{DeviceError, DeviceResult};
+use super::{ProtocolHandler, ConnectionStatus, HttpClient};
 use async_trait::async_trait;
-use fujinet_core::platform::network::HttpClient;
 
 #[async_trait]
 pub trait HttpProtocolHandler: ProtocolHandler + std::any::Any {

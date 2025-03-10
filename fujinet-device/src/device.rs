@@ -1,12 +1,31 @@
 use async_trait::async_trait;
-use crate::error::DeviceResult;
 use std::any::Any;
 
-pub mod status;
-pub mod network;
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum DeviceStatus {
+    Ready,
+    Error,
+    Disconnected,
+}
 
-pub use network::NetworkDevice;
-pub use status::DeviceStatus;
+/// Result type for device operations
+pub type DeviceResult<T> = Result<T, DeviceError>;
+
+/// Error type for device operations
+#[derive(Debug, Clone, PartialEq)]
+pub enum DeviceError {
+    NotSupported,
+    NotReady,
+    InvalidProtocol,
+    InvalidOperation,
+    IoError(String),
+}
+
+impl From<std::io::Error> for DeviceError {
+    fn from(err: std::io::Error) -> Self {
+        DeviceError::IoError(err.to_string())
+    }
+}
 
 #[async_trait]
 pub trait Device: Send + Sync + Any {

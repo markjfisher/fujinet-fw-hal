@@ -6,8 +6,11 @@ authors.workspace = true
 description = "Platform-specific implementations for FujiNet HAL, e.g. Raspberry Pi, x86, ESP32, etc."
 license.workspace = true
 
+[lib]
+path = "src/lib.rs"
+
 [dependencies]
-fujinet-core = { path = "../fujinet-core" }
+async-trait = { workspace = true }
 fujinet-device = { path = "../fujinet-device" }
 tokio = { workspace = true }
 log = { workspace = true }

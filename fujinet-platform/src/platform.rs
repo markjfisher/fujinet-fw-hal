@@ -1,8 +1,5 @@
 use async_trait::async_trait;
-use crate::error::DeviceResult;
-use crate::device::Device;
-
-pub mod network;
+use fujinet_device::device::{Device, DeviceResult};
 
 #[async_trait]
 pub trait Platform: Send + Sync {

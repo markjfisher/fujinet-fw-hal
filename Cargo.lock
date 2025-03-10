@@ -80,6 +80,9 @@ name = "fujinet-core"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "fujinet-device",
+ "fujinet-host",
+ "fujinet-platform",
  "libc",
  "log",
  "thiserror",
@@ -91,7 +94,6 @@ name = "fujinet-device"
 version = "0.1.0"
 dependencies = [
  "async-trait",
- "fujinet-core",
  "log",
  "tokio",
 ]
@@ -100,8 +102,8 @@ dependencies = [
 name = "fujinet-host"
 version = "0.1.0"
 dependencies = [
- "fujinet-core",
- "fujinet-platform",
+ "async-trait",
+ "fujinet-device",
  "log",
  "tokio",
 ]
@@ -110,7 +112,7 @@ dependencies = [
 name = "fujinet-platform"
 version = "0.1.0"
 dependencies = [
- "fujinet-core",
+ "async-trait",
  "fujinet-device",
  "log",
  "tokio",
