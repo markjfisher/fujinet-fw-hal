@@ -1,15 +1,11 @@
 pub mod http;
 
 use fujinet_core::error::{DeviceError, DeviceResult};
-use fujinet_core::platform::network::NetworkDriver;
 use async_trait::async_trait;
 use std::any::Any;
 
 #[async_trait]
 pub trait ProtocolHandler: Send + Sync + Default {
-    fn set_network_driver(&mut self, driver: Box<dyn NetworkDriver>);
-    fn get_network_driver(&mut self) -> Option<&mut dyn NetworkDriver>;
-    
     /// Open a connection to the endpoint
     async fn open(&mut self, endpoint: &str) -> DeviceResult<()>;
     

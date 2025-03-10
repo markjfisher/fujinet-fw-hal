@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use crate::error::DeviceResult;
-use crate::platform::network::NetworkDriver;
+use std::any::Any;
 
 pub mod status;
 pub mod network;
@@ -9,7 +9,10 @@ pub use network::NetworkDevice;
 pub use status::DeviceStatus;
 
 #[async_trait]
-pub trait Device: Send + Sync {
+pub trait Device: Send + Sync + Any {
+    fn as_any(&self) -> &dyn Any;
+    fn as_any_mut(&mut self) -> &mut dyn Any;
+
     /// Returns the name of the device
     fn name(&self) -> &str;
 
@@ -33,8 +36,4 @@ pub trait Device: Send + Sync {
 
     /// Gets the current status of the device
     async fn get_status(&self) -> DeviceResult<DeviceStatus>;
-
-    fn set_network_driver(&mut self, driver: Box<dyn NetworkDriver>);
-
-    fn get_network_driver(&mut self) -> Option<&mut dyn NetworkDriver>;
 } 
