@@ -16,3 +16,6 @@ tokio = { workspace = true, features = ["full"] }
 log = { workspace = true }
 libc = "0.2"
 thiserror = { workspace = true }
+
+[dev-dependencies]
+mockall = "0.13.1"

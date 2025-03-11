@@ -3,6 +3,7 @@ use crate::device::DeviceResult;
 use std::any::Any;
 use std::collections::HashMap;
 
+#[cfg_attr(test, mockall::automock)]
 #[async_trait]
 pub trait HttpClient: Send + Sync + Any {
     async fn connect(&mut self, endpoint: &str) -> DeviceResult<()>;
