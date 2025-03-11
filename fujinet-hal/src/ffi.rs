@@ -1,8 +1,8 @@
 use std::ffi::c_void;
 use libc::size_t;
-use fujinet_device::device::{Device, DeviceError};
-use fujinet_platform::Platform;
-use fujinet_host::HostTranslator;
+use crate::device::{Device, DeviceError};
+use crate::platform::Platform;
+use crate::host::HostTranslator;
 use tokio::runtime::Runtime;
 use std::borrow::Cow;
 

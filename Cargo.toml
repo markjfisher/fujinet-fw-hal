@@ -1,11 +1,7 @@
 [workspace]
 resolver = "2"
 members = [
-    "fujinet-core",
-    "fujinet-device",
-    "fujinet-platform",
-    "fujinet-host",
-    "fujinet-common",
+    "fujinet-hal",
 ]
 
 [workspace.package]

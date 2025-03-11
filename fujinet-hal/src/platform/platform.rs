@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use fujinet_device::device::{Device, DeviceResult};
+use crate::device::{Device, DeviceResult};
 
 #[async_trait]
 pub trait Platform: Send + Sync {

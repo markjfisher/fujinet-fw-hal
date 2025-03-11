@@ -1,9 +1,9 @@
 [package]
-name = "fujinet-core"
+name = "fujinet-hal"
 version = "0.1.0"
 edition = "2021"
 authors.workspace = true
-description = "Core FFI layer for FujiNet HAL"
+description = "FujiNet HAL"
 license.workspace = true
 
 [lib]
@@ -12,9 +12,6 @@ crate-type = ["cdylib", "staticlib", "rlib"]
 
 [dependencies]
 async-trait = { workspace = true }
-fujinet-device = { path = "../fujinet-device" }
-fujinet-platform = { path = "../fujinet-platform" }
-fujinet-host = { path = "../fujinet-host" }
 tokio = { workspace = true, features = ["full"] }
 log = { workspace = true }
 libc = "0.2"

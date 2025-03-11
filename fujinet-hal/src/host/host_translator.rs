@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use fujinet_device::device::DeviceResult;
+use crate::device::DeviceResult;
 use std::borrow::Cow;
 
 #[async_trait]
