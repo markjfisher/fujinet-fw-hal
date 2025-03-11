@@ -24,8 +24,9 @@ pub trait ProtocolHandler: Send + Sync + Default {
     async fn available(&self) -> DeviceResult<usize>;
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Default)]
 pub enum ConnectionStatus {
+    #[default]
     Disconnected,
     Connecting,
     Connected,

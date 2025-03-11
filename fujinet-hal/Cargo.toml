@@ -18,4 +18,4 @@ libc = "0.2"
 thiserror = { workspace = true }
 
 [dev-dependencies]
-mockall = "0.13.1"
+faux = "0.1.12"

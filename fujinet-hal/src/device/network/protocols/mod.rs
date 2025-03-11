@@ -1,5 +1,5 @@
 pub mod http;
-mod protocol_handler;
+pub mod protocol_handler;
 mod http_client;
 
 pub use protocol_handler::{ProtocolHandler, ConnectionStatus};
