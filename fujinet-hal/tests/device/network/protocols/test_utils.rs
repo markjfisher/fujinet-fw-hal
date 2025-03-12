@@ -20,6 +20,7 @@ struct TestHttpClientState {
     status_code: u16,
     last_request_headers: HashMap<String, String>,
     response_data: Vec<u8>,
+    is_connected: bool,
 }
 
 impl Default for TestHttpClient {
@@ -33,6 +34,7 @@ impl Default for TestHttpClient {
                 status_code: 200,
                 last_request_headers: HashMap::new(),
                 response_data: Vec::new(),
+                is_connected: false,
             })),
         }
     }
@@ -42,6 +44,7 @@ pub trait TestHttpClientHelpers {
     fn get_last_request(&self) -> Option<(String, String, Vec<u8>)>;
     fn get_last_request_headers(&self) -> Option<HashMap<String, String>>;
     fn set_response_data(&self, data: &[u8]);
+    fn is_connected(&self) -> bool;
 }
 
 impl TestHttpClientHelpers for TestHttpClient {
@@ -59,13 +62,18 @@ impl TestHttpClientHelpers for TestHttpClient {
         let mut state = self.state.lock().unwrap();
         state.response_data = data.to_vec();
     }
+
+    fn is_connected(&self) -> bool {
+        let state = self.state.lock().unwrap();
+        state.is_connected
+    }
 }
 
 #[async_trait]
 impl HttpClient for TestHttpClient {
     async fn connect(&mut self, url: &str) -> DeviceResult<()> {
         let mut state = self.state.lock().unwrap();
-        state.last_method = "CONNECT".to_string();
+        state.is_connected = true;
         state.last_url = url.to_string();
         state.last_request_headers = state.headers.clone();
         Ok(())
@@ -73,7 +81,7 @@ impl HttpClient for TestHttpClient {
 
     async fn disconnect(&mut self) -> DeviceResult<()> {
         let mut state = self.state.lock().unwrap();
-        state.last_method = "DISCONNECT".to_string();
+        state.is_connected = false;
         Ok(())
     }
 

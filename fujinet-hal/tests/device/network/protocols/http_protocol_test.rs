@@ -219,26 +219,21 @@ async fn test_http_protocol_connection_state() -> DeviceResult<()> {
 
     // Test initial state
     assert_eq!(protocol.status().await?, ConnectionStatus::Disconnected);
+    assert!(!test_client.is_connected());
 
     // Test connecting
     protocol.open("http://test.com").await?;
     assert_eq!(protocol.status().await?, ConnectionStatus::Connected);
+    assert!(test_client.is_connected());
     
-    // Verify connect request details
-    let (method, url, body) = test_client.get_last_request().unwrap();
-    assert_eq!(method, "CONNECT");
+    // Verify URL was set correctly
+    let (_, url, _) = test_client.get_last_request().unwrap();
     assert_eq!(url, "http://test.com");
-    assert!(body.is_empty());
 
     // Test closing
     protocol.close().await?;
     assert_eq!(protocol.status().await?, ConnectionStatus::Disconnected);
-    
-    // Verify disconnect request details
-    let (method, url, body) = test_client.get_last_request().unwrap();
-    assert_eq!(method, "DISCONNECT");
-    assert_eq!(url, "http://test.com"); // URL should match the connect URL
-    assert!(body.is_empty());
+    assert!(!test_client.is_connected());
 
     // Test operations when disconnected
     assert!(protocol.write(b"test").await.is_err());
