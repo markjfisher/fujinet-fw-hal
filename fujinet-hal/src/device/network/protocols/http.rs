@@ -171,6 +171,10 @@ impl ProtocolHandler for HttpProtocol {
     }
 
     async fn write(&mut self, buf: &[u8]) -> DeviceResult<usize> {
+        if self.status != ConnectionStatus::Connected {
+            return Err(DeviceError::NotReady);
+        }
+
         if let Some(client) = &mut self.http_client {
             // For protocol-agnostic usage, treat writes as POST requests
             let response = client.post(&self.endpoint, buf).await?;
@@ -183,6 +187,10 @@ impl ProtocolHandler for HttpProtocol {
     }
 
     async fn read(&mut self, buf: &mut [u8]) -> DeviceResult<usize> {
+        if self.status != ConnectionStatus::Connected {
+            return Err(DeviceError::NotReady);
+        }
+
         if let Some(client) = &mut self.http_client {
             // If no response data available, do a GET request
             if self.response_buffer.is_empty() {

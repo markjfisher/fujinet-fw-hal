@@ -19,6 +19,7 @@ struct TestHttpClientState {
     headers: HashMap<String, String>,
     status_code: u16,
     last_request_headers: HashMap<String, String>,
+    response_data: Vec<u8>,
 }
 
 impl Default for TestHttpClient {
@@ -31,6 +32,7 @@ impl Default for TestHttpClient {
                 headers: HashMap::new(),
                 status_code: 200,
                 last_request_headers: HashMap::new(),
+                response_data: Vec::new(),
             })),
         }
     }
@@ -39,6 +41,7 @@ impl Default for TestHttpClient {
 pub trait TestHttpClientHelpers {
     fn get_last_request(&self) -> Option<(String, String, Vec<u8>)>;
     fn get_last_request_headers(&self) -> Option<HashMap<String, String>>;
+    fn set_response_data(&self, data: &[u8]);
 }
 
 impl TestHttpClientHelpers for TestHttpClient {
@@ -50,6 +53,11 @@ impl TestHttpClientHelpers for TestHttpClient {
     fn get_last_request_headers(&self) -> Option<HashMap<String, String>> {
         let state = self.state.lock().unwrap();
         Some(state.last_request_headers.clone())
+    }
+
+    fn set_response_data(&self, data: &[u8]) {
+        let mut state = self.state.lock().unwrap();
+        state.response_data = data.to_vec();
     }
 }
 
@@ -73,8 +81,9 @@ impl HttpClient for TestHttpClient {
         let mut state = self.state.lock().unwrap();
         state.last_method = "GET".to_string();
         state.last_url = url.to_string();
+        state.last_body.clear();
         state.last_request_headers = state.headers.clone();
-        Ok(vec![])
+        Ok(state.response_data.clone())
     }
 
     async fn post(&mut self, url: &str, body: &[u8]) -> DeviceResult<Vec<u8>> {

@@ -133,4 +133,116 @@ async fn test_http_protocol_headers() -> DeviceResult<()> {
     assert_eq!(request_headers.get("X-Custom").unwrap(), "value");
 
     Ok(())
+}
+
+#[tokio::test]
+async fn test_http_protocol_response_buffer() -> DeviceResult<()> {
+    let mut protocol = HttpProtocol::default();
+    let test_client = TestHttpClient::default();
+    protocol.set_http_client(Box::new(test_client.clone()));
+
+    // Set up test response data
+    test_client.set_response_data(b"test response data");
+
+    // Connect first
+    protocol.open("http://test.com").await?;
+    
+    // Make a request that returns a response
+    protocol.get("http://test.com").await?;
+    
+    // Verify request details
+    let (method, url, body) = test_client.get_last_request().unwrap();
+    assert_eq!(method, "GET");
+    assert_eq!(url, "http://test.com");
+    assert!(body.is_empty());
+    
+    // Read all data in 4-byte chunks
+    let mut buf = [0u8; 4];
+    let mut total_read = 0;
+    loop {
+        let read = protocol.read(&mut buf).await?;
+        if read == 0 {
+            break;
+        }
+        total_read += read;
+    }
+    
+    // Verify we read all the data
+    assert_eq!(total_read, b"test response data".len());
+    
+    // Verify buffer is exhausted
+    let read = protocol.read(&mut buf).await?;
+    assert_eq!(read, 0); // EOF
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_http_protocol_handler_implementation() -> DeviceResult<()> {
+    let mut protocol = HttpProtocol::default();
+    let test_client = TestHttpClient::default();
+    protocol.set_http_client(Box::new(test_client.clone()));
+
+    // Connect first
+    protocol.open("http://test.com").await?;
+
+    // Test write as POST
+    let test_data = b"test data";
+    let written = protocol.write(test_data).await?;
+    assert_eq!(written, test_data.len());
+    
+    // Verify it was sent as POST with correct URL
+    let (method, url, body) = test_client.get_last_request().unwrap();
+    assert_eq!(method, "POST");
+    assert_eq!(url, "http://test.com");
+    assert_eq!(body, test_data);
+
+    // Test read as GET when no response data
+    let mut buf = [0u8; 10];
+    let read = protocol.read(&mut buf).await?;
+    assert_eq!(read, 0); // No data available initially
+    
+    // Verify it was sent as GET with correct URL
+    let (method, url, body) = test_client.get_last_request().unwrap();
+    assert_eq!(method, "GET");
+    assert_eq!(url, "http://test.com");
+    assert!(body.is_empty());
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_http_protocol_connection_state() -> DeviceResult<()> {
+    let mut protocol = HttpProtocol::default();
+    let test_client = TestHttpClient::default();
+    protocol.set_http_client(Box::new(test_client.clone()));
+
+    // Test initial state
+    assert_eq!(protocol.status().await?, ConnectionStatus::Disconnected);
+
+    // Test connecting
+    protocol.open("http://test.com").await?;
+    assert_eq!(protocol.status().await?, ConnectionStatus::Connected);
+    
+    // Verify connect request details
+    let (method, url, body) = test_client.get_last_request().unwrap();
+    assert_eq!(method, "CONNECT");
+    assert_eq!(url, "http://test.com");
+    assert!(body.is_empty());
+
+    // Test closing
+    protocol.close().await?;
+    assert_eq!(protocol.status().await?, ConnectionStatus::Disconnected);
+    
+    // Verify disconnect request details
+    let (method, url, body) = test_client.get_last_request().unwrap();
+    assert_eq!(method, "DISCONNECT");
+    assert_eq!(url, "http://test.com"); // URL should match the connect URL
+    assert!(body.is_empty());
+
+    // Test operations when disconnected
+    assert!(protocol.write(b"test").await.is_err());
+    assert!(protocol.read(&mut [0; 10]).await.is_err());
+
+    Ok(())
 } 
