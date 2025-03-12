@@ -117,7 +117,8 @@ impl HttpProtocolHandler for HttpProtocol {
 
     async fn add_header(&mut self, key: &str, value: &str) -> DeviceResult<()> {
         if let Some(client) = &mut self.http_client {
-            client.set_header(key, value).await
+            client.set_header(key, value);
+            Ok(())
         } else {
             Err(DeviceError::NotReady)
         }
@@ -125,7 +126,7 @@ impl HttpProtocolHandler for HttpProtocol {
 
     async fn get_status_code(&self) -> DeviceResult<u16> {
         if let Some(client) = &self.http_client {
-            client.get_status_code().await
+            Ok(client.get_status_code())
         } else {
             Err(DeviceError::NotReady)
         }
@@ -133,7 +134,7 @@ impl HttpProtocolHandler for HttpProtocol {
 
     async fn get_headers(&self) -> DeviceResult<HashMap<String, String>> {
         if let Some(client) = &self.http_client {
-            client.get_headers().await
+            Ok(client.get_headers())
         } else {
             Err(DeviceError::NotReady)
         }
