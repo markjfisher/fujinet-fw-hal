@@ -18,6 +18,7 @@ struct TestHttpClientState {
     last_body: Vec<u8>,
     headers: HashMap<String, String>,
     status_code: u16,
+    last_request_headers: HashMap<String, String>,
 }
 
 impl Default for TestHttpClient {
@@ -29,6 +30,7 @@ impl Default for TestHttpClient {
                 last_body: Vec::new(),
                 headers: HashMap::new(),
                 status_code: 200,
+                last_request_headers: HashMap::new(),
             })),
         }
     }
@@ -36,7 +38,7 @@ impl Default for TestHttpClient {
 
 pub trait TestHttpClientHelpers {
     fn get_last_request(&self) -> Option<(String, String, Vec<u8>)>;
-    fn get_test_headers(&self) -> Option<HashMap<String, String>>;
+    fn get_last_request_headers(&self) -> Option<HashMap<String, String>>;
 }
 
 impl TestHttpClientHelpers for TestHttpClient {
@@ -45,9 +47,9 @@ impl TestHttpClientHelpers for TestHttpClient {
         Some((state.last_method.clone(), state.last_url.clone(), state.last_body.clone()))
     }
 
-    fn get_test_headers(&self) -> Option<HashMap<String, String>> {
+    fn get_last_request_headers(&self) -> Option<HashMap<String, String>> {
         let state = self.state.lock().unwrap();
-        Some(state.headers.clone())
+        Some(state.last_request_headers.clone())
     }
 }
 
@@ -57,6 +59,7 @@ impl HttpClient for TestHttpClient {
         let mut state = self.state.lock().unwrap();
         state.last_method = "CONNECT".to_string();
         state.last_url = url.to_string();
+        state.last_request_headers = state.headers.clone();
         Ok(())
     }
 
@@ -70,6 +73,7 @@ impl HttpClient for TestHttpClient {
         let mut state = self.state.lock().unwrap();
         state.last_method = "GET".to_string();
         state.last_url = url.to_string();
+        state.last_request_headers = state.headers.clone();
         Ok(vec![])
     }
 
@@ -78,6 +82,7 @@ impl HttpClient for TestHttpClient {
         state.last_method = "POST".to_string();
         state.last_url = url.to_string();
         state.last_body = body.to_vec();
+        state.last_request_headers = state.headers.clone();
         Ok(vec![])
     }
 
@@ -86,6 +91,7 @@ impl HttpClient for TestHttpClient {
         state.last_method = "PUT".to_string();
         state.last_url = url.to_string();
         state.last_body = body.to_vec();
+        state.last_request_headers = state.headers.clone();
         Ok(vec![])
     }
 
@@ -94,6 +100,7 @@ impl HttpClient for TestHttpClient {
         state.last_method = "DELETE".to_string();
         state.last_url = url.to_string();
         state.last_body.clear();
+        state.last_request_headers = state.headers.clone();
         Ok(vec![])
     }
 
@@ -101,6 +108,7 @@ impl HttpClient for TestHttpClient {
         let mut state = self.state.lock().unwrap();
         state.last_method = "HEAD".to_string();
         state.last_url = url.to_string();
+        state.last_request_headers = state.headers.clone();
         Ok(())
     }
 
@@ -109,6 +117,7 @@ impl HttpClient for TestHttpClient {
         state.last_method = "PATCH".to_string();
         state.last_url = url.to_string();
         state.last_body = body.to_vec();
+        state.last_request_headers = state.headers.clone();
         Ok(vec![])
     }
 

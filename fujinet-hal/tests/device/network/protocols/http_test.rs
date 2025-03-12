@@ -90,24 +90,47 @@ async fn test_http_protocol_error_scenarios() {
     // Test invalid request method
     protocol.set_http_client(Box::new(TestHttpClient::default()));
     assert!(matches!(
-        protocol.post("test", &[]).await,
-        Ok(())
+        protocol.send_request("INVALID", "test", &[]).await,
+        Err(DeviceError::InvalidOperation)
     ));
 }
 
 #[tokio::test]
 async fn test_http_protocol_headers() -> DeviceResult<()> {
     let mut protocol = HttpProtocol::default();
-    protocol.set_http_client(Box::new(TestHttpClient::default()));
+    let test_client = TestHttpClient::default();
+    protocol.set_http_client(Box::new(test_client.clone()));
 
     // Add some headers
     protocol.add_header("Content-Type", "application/json").await?;
     protocol.add_header("Authorization", "Bearer token").await?;
 
-    // Verify headers were set
+    // Verify headers are stored in protocol
     let headers = protocol.get_headers().await?;
     assert_eq!(headers.get("Content-Type").unwrap(), "application/json");
     assert_eq!(headers.get("Authorization").unwrap(), "Bearer token");
+
+    // Verify no headers have been sent yet (no requests made)
+    let request_headers = test_client.get_last_request_headers().unwrap();
+    assert!(request_headers.is_empty());
+
+    // Make a request and verify headers were included
+    protocol.send_request("GET", "http://test.com", &[]).await?;
+    
+    // Verify the headers were actually sent with the request
+    let request_headers = test_client.get_last_request_headers().unwrap();
+    assert_eq!(request_headers.get("Content-Type").unwrap(), "application/json");
+    assert_eq!(request_headers.get("Authorization").unwrap(), "Bearer token");
+
+    // Add a new header and verify it's included in next request
+    protocol.add_header("X-Custom", "value").await?;
+    protocol.send_request("POST", "http://test.com", b"data").await?;
+    
+    // Verify all headers were sent, including the new one
+    let request_headers = test_client.get_last_request_headers().unwrap();
+    assert_eq!(request_headers.get("Content-Type").unwrap(), "application/json");
+    assert_eq!(request_headers.get("Authorization").unwrap(), "Bearer token");
+    assert_eq!(request_headers.get("X-Custom").unwrap(), "value");
 
     Ok(())
 } 
