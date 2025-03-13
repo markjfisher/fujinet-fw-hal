@@ -87,7 +87,7 @@ if ! rustup target list | grep -q "$TARGET (installed)"; then
     rustup target add "$TARGET"
 fi
 
-# Check for required toolchains
+# Check for required toolchains and dependencies
 if [[ "$TARGET" == "x86_64-pc-windows-gnu" ]]; then
     echo "Checking for MinGW toolchain..."
     if ! command -v x86_64-w64-mingw32-gcc &> /dev/null; then
@@ -100,6 +100,19 @@ if [[ "$TARGET" == "x86_64-pc-windows-gnu" ]]; then
         echo "For Linux:"
         echo "  sudo apt update"
         echo "  sudo apt install mingw-w64"
+        echo ""
+        echo "Ensure you have rustup installed, see https://rustup.rs/"
+        exit 1
+    fi
+fi
+
+# Check for OpenSSL development packages
+if [[ "$OSTYPE" == "linux-gnu" ]]; then
+    echo "Checking for OpenSSL development packages..."
+    if ! dpkg -l | grep -q "libssl-dev"; then
+        echo "OpenSSL development packages not found. Please install them, on Ubuntu/Debian:"
+        echo "  sudo apt update"
+        echo "  sudo apt install -y libssl-dev pkg-config"
         exit 1
     fi
 fi
