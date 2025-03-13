@@ -22,6 +22,7 @@ pub enum FujiError {
     InvalidParameter = 4,
     InvalidProtocol = 5,
     InvalidOperation = 6,
+    NetworkError = 7,
 }
 
 impl From<DeviceError> for FujiError {
@@ -32,6 +33,7 @@ impl From<DeviceError> for FujiError {
             DeviceError::NotSupported => FujiError::NotSupported,
             DeviceError::InvalidProtocol => FujiError::InvalidProtocol,
             DeviceError::InvalidOperation => FujiError::InvalidOperation,
+            DeviceError::NetworkError(_) => FujiError::NetworkError,
         }
     }
 }
