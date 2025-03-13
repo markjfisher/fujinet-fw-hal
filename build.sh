@@ -1,11 +1,12 @@
 #!/bin/bash
 
 # Default values
-if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "win32" ]]; then
+if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "win32" || "$OSTYPE" == "cygwin" ]]; then
     TARGET="x86_64-pc-windows-gnu"
 else
     TARGET="x86_64-unknown-linux-gnu"
 fi
+
 BUILD_TYPE="release"
 SHOW_HELP=false
 
