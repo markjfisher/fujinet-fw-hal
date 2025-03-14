@@ -104,8 +104,8 @@ async fn test_network_device_basic_operations() -> DeviceResult<()> {
 
 #[tokio::test]
 async fn test_network_device_factory() -> DeviceResult<()> {
-    // Test valid HTTP URL
-    let device = new_network_device("http://example.com".to_string())?;
+    // Test valid HTTP URL with default unit
+    let device = new_network_device("N:http://example.com".to_string())?;
     assert_eq!(device.name(), "network");
     assert_eq!(device.get_status().await?, DeviceStatus::Disconnected);
     
@@ -113,8 +113,8 @@ async fn test_network_device_factory() -> DeviceResult<()> {
     let _device = device.as_any().downcast_ref::<NetworkDeviceImpl<HttpProtocol>>()
         .expect("Device should be NetworkDeviceImpl with HttpProtocol");
 
-    // Test valid HTTPS URL
-    let device = new_network_device("https://example.com".to_string())?;
+    // Test valid HTTPS URL with specific unit
+    let device = new_network_device("N2:https://example.com".to_string())?;
     assert_eq!(device.name(), "network");
     assert_eq!(device.get_status().await?, DeviceStatus::Disconnected);
     
@@ -123,11 +123,15 @@ async fn test_network_device_factory() -> DeviceResult<()> {
         .expect("Device should be NetworkDeviceImpl with HttpProtocol");
 
     // Test invalid protocol
-    let result = new_network_device("invalid://example.com".to_string());
+    let result = new_network_device("N:invalid://example.com".to_string());
     assert!(result.is_err());
 
     // Test malformed URL
     let result = new_network_device("malformed_url".to_string());
+    assert!(result.is_err());
+
+    // Test invalid unit number
+    let result = new_network_device("N9:http://example.com".to_string());
     assert!(result.is_err());
 
     Ok(())

@@ -3,6 +3,7 @@ use crate::device::{Device, DeviceResult, DeviceError, DeviceStatus};
 use std::any::Any;
 use super::protocols::{ProtocolHandler, ConnectionStatus};
 use super::protocols::http::HttpProtocol;
+use super::url::NetworkUrl;
 
 #[async_trait]
 pub trait NetworkDevice: Device {
@@ -85,11 +86,13 @@ impl<P: ProtocolHandler> Device for NetworkDeviceImpl<P> {
 
 // Factory function to create the right device type based on URL
 pub fn new_network_device(endpoint: String) -> DeviceResult<Box<dyn Device>> {
-    let scheme = endpoint.split("://").next().ok_or(DeviceError::InvalidProtocol)?;
+    let parsed = NetworkUrl::parse(&endpoint)?;
+    let scheme = parsed.scheme()?;
     
     match scheme {
         "http" | "https" => {
             let protocol = HttpProtocol::default();
+            // The protocol will handle the network unit internally
             let device = NetworkDeviceImpl::new(endpoint, protocol);
             Ok(Box::new(device))
         },

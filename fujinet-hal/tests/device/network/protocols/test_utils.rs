@@ -21,6 +21,7 @@ struct TestHttpClientState {
     last_request_headers: HashMap<String, String>,
     response_data: Vec<u8>,
     is_connected: bool,
+    network_unit: u8,
 }
 
 impl Default for TestHttpClient {
@@ -35,6 +36,7 @@ impl Default for TestHttpClient {
                 last_request_headers: HashMap::new(),
                 response_data: Vec::new(),
                 is_connected: false,
+                network_unit: 1,
             })),
         }
     }
@@ -50,12 +52,24 @@ pub trait TestHttpClientHelpers {
 impl TestHttpClientHelpers for TestHttpClient {
     fn get_last_request(&self) -> Option<(String, String, Vec<u8>)> {
         let state = self.state.lock().unwrap();
-        Some((state.last_method.clone(), state.last_url.clone(), state.last_body.clone()))
+        if state.last_method.is_empty() {
+            None
+        } else {
+            Some((
+                state.last_method.clone(),
+                state.last_url.clone(),
+                state.last_body.clone(),
+            ))
+        }
     }
 
     fn get_last_request_headers(&self) -> Option<HashMap<String, String>> {
         let state = self.state.lock().unwrap();
-        Some(state.last_request_headers.clone())
+        if state.last_request_headers.is_empty() {
+            None
+        } else {
+            Some(state.last_request_headers.clone())
+        }
     }
 
     fn set_response_data(&self, data: &[u8]) {
@@ -64,8 +78,7 @@ impl TestHttpClientHelpers for TestHttpClient {
     }
 
     fn is_connected(&self) -> bool {
-        let state = self.state.lock().unwrap();
-        state.is_connected
+        self.state.lock().unwrap().is_connected
     }
 }
 
@@ -151,6 +164,11 @@ impl HttpClient for TestHttpClient {
     fn get_headers(&self) -> HashMap<String, String> {
         let state = self.state.lock().unwrap();
         state.headers.clone()
+    }
+
+    fn get_network_unit(&self) -> u8 {
+        let state = self.state.lock().unwrap();
+        state.network_unit
     }
 }
 
