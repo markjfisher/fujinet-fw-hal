@@ -1,5 +1,5 @@
 #[cfg(target_arch = "x86_64")]
-mod network;
+pub mod network;
 
 #[cfg(target_arch = "x86_64")]
 pub use network::*;

@@ -18,5 +18,5 @@ pub trait HttpClient: Any + Send + Sync {
     fn set_header(&mut self, key: &str, value: &str);
     fn get_status_code(&self) -> u16;
     fn get_headers(&self) -> HashMap<String, String>;
-
+    fn get_network_unit(&self) -> u8;
 } 

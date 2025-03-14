@@ -254,6 +254,7 @@ dependencies = [
  "faux",
  "libc",
  "log",
+ "once_cell",
  "reqwest",
  "thiserror",
  "tokio",
