@@ -3,7 +3,7 @@
 #include <string.h>
 #include "fujinet-network.h"
 
-const char* httpbin = "N1:http://localhost:8085/";
+const char* httpbin = "N1:http://192.168.1.100:8085/";
 char url_buffer[128];
 char *url;
 uint8_t response_buffer[4096];
@@ -15,6 +15,16 @@ void print_error(const char* operation, uint8_t result) {
 char *create_url(char *method) {
     sprintf(url_buffer, "%s%s", httpbin, method);
     return (char *) url_buffer;
+}
+
+void print_response() {
+    int16_t bytes_read = network_http_get(url, response_buffer, sizeof(response_buffer));
+    if (bytes_read < 0) {
+        print_error("network_http_get", -bytes_read);
+        return 1;
+    }
+    printf("HTTP GET successful, received %d bytes\n", bytes_read);
+    printf("Response:\n%s\n", response_buffer);
 }
 
 int main() {
