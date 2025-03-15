@@ -315,25 +315,33 @@ pub extern "C" fn network_http_post_bin(
 }
 
 #[no_mangle]
-pub extern "C" fn network_http_get(devicespec: *const c_char) -> u8 {
+pub extern "C" fn network_http_get(devicespec: *const c_char, buf: *mut u8, len: u16) -> i16 {
     unsafe {
-        if devicespec.is_null() {
-            return 2; // FN_ERR_BAD_CMD
+        if devicespec.is_null() || buf.is_null() {
+            return -(2 as i16); // -FN_ERR_BAD_CMD
         }
 
         // Convert C string to Rust string without taking ownership
         let devicespec = match std::ffi::CStr::from_ptr(devicespec).to_str() {
             Ok(s) => s,
-            Err(_) => return 2, // FN_ERR_BAD_CMD for invalid UTF-8
+            Err(_) => return -(2 as i16), // -FN_ERR_BAD_CMD for invalid UTF-8
         };
 
         let mut client = HTTP_CLIENT.lock().unwrap();
         if let Some(client) = client.as_mut() {
             let rt = Runtime::new().unwrap();
-            let result = rt.block_on(client.get(devicespec));
-            device_result_to_error(result.map(|_| ()))
+            match rt.block_on(client.get(devicespec)) {
+                Ok(data) => {
+                    // Copy data to the provided buffer
+                    let copy_len = std::cmp::min(data.len(), len as usize);
+                    let buf_slice = std::slice::from_raw_parts_mut(buf, copy_len);
+                    buf_slice.copy_from_slice(&data[..copy_len]);
+                    copy_len as i16
+                }
+                Err(_) => -(4 as i16), // -FN_ERR_WARNING for network errors
+            }
         } else {
-            5 // FN_ERR_NO_DEVICE
+            -(5 as i16) // -FN_ERR_NO_DEVICE
         }
     }
 }
