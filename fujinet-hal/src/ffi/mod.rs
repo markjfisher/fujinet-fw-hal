@@ -3,7 +3,7 @@ use crate::device::DeviceError;
 
 // Declare modules first
 mod device;
-mod platform;
+pub mod platform;
 
 // Then re-export what we want to be public
 pub use device::*;
