@@ -5,6 +5,8 @@ use std::sync::Mutex;
 use crate::device::network::protocols::HttpClient;
 use crate::platform::x86::network::X86HttpClient;
 use crate::ffi::device_result_to_error;
+use crate::device::network::NetworkUrl;
+use crate::device::DeviceError;
 
 // Global state for C interface
 static HTTP_CLIENT: Lazy<Mutex<Option<Box<dyn HttpClient>>>> = Lazy::new(|| Mutex::new(None));
@@ -15,6 +17,38 @@ pub extern "C" fn network_init() -> u8 {
     let mut client = HTTP_CLIENT.lock().unwrap();
     *client = Some(Box::new(X86HttpClient::default()));
     device_result_to_error(Ok(()))
+}
+
+#[no_mangle]
+pub extern "C" fn network_open(devicespec: *const c_char, mode: u8, trans: u8) -> u8 {
+    unsafe {
+        if devicespec.is_null() {
+            return 2; // FN_ERR_BAD_CMD
+        }
+
+        // Convert C string to Rust string without taking ownership
+        let devicespec = match std::ffi::CStr::from_ptr(devicespec).to_str() {
+            Ok(s) => s,
+            Err(_) => return 2, // FN_ERR_BAD_CMD for invalid UTF-8
+        };
+
+        // Parse the network URL
+        let url = match NetworkUrl::parse(devicespec) {
+            Ok(url) => url,
+            Err(_) => return 2, // FN_ERR_BAD_CMD for invalid URL
+        };
+
+        let mut client = HTTP_CLIENT.lock().unwrap();
+        if let Some(client) = client.as_mut() {
+            let rt = Runtime::new().unwrap();
+            match rt.block_on(client.open(&url, mode, trans)) {
+                Ok(_) => 0, // FN_ERR_OK
+                Err(e) => device_result_to_error(Err(e)),
+            }
+        } else {
+            5 // FN_ERR_NO_DEVICE
+        }
+    }
 }
 
 #[no_mangle]

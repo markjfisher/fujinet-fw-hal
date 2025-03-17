@@ -6,12 +6,16 @@ use super::protocols::http::HttpProtocol;
 use super::url::NetworkUrl;
 
 #[async_trait]
-pub trait NetworkDevice: Device {
+pub trait NetworkDevice: Device + Send + Sync {
     /// Connects to a network endpoint
     async fn connect(&mut self, endpoint: &str) -> DeviceResult<()>;
 
     /// Disconnects from the current endpoint
     async fn disconnect(&mut self) -> DeviceResult<()>;
+
+    /// Opens a network connection using the specified URL
+    /// The URL determines which protocol handler to use
+    async fn open(&mut self, url: &NetworkUrl) -> DeviceResult<()>;
 }
 
 pub struct NetworkDeviceImpl<P: ProtocolHandler + 'static> {

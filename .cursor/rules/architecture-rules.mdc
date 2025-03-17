@@ -1,0 +1,213 @@
+---
+description: Setting architecture for projects
+globs: *.rs,*.toml,*.c,*.h,*.sh
+alwaysApply: true
+---
+
+# FujiNet HAL Architecture Rules
+
+FujiNet is a multi-peripheral emulator and WiFi network device for vintage computers.
+The first completed hardware was for the Atari 8-Bit line of computers and development
+has begun for other systems (Coleco ADAM, Apple II, Commodore 64, Atari Lynx, ZX Spectrum
+and more) with the goal of supporting as many old systems as possible.
+
+What sets FujiNet apart from other WiFi devices is the new Network Device (the N Device).
+The N device allows vintage computers that do not have enough processing power to handle
+TCP/IP connections themselves to talk to the modern internet over WiFi. Virtual adapters
+have been created for many protocols including: TCP, UDP, HTTP, FTP, TNFS, HTTPS (SSL/TLS),
+SSH, TELNET, WebDAV and JSON parser.
+
+Examples of Fujinet include:
+- an esp32 adapter that plugs into an Atari 8 bit machine on the SIO port.
+- an esp32 adapter that plugs into an Apple2 8 bit machine on the drive port using SmartPort protocol.
+- an application running on X86 hardware that communicates over TCP 
+
+
+In order to work as an application, or a library, this project follows Hardware Abstraction Layer principles.
+
+## Layer Architecture
+
+### 1. Device Layer (src/device/)
+- Contains platform-agnostic device implementations
+- Defines core traits and interfaces
+- Handles protocol-specific logic
+- Key components:
+  - NetworkUrl: Parses device specifications
+  - BaseHttpClient: Common HTTP functionality
+  - NetworkDevice: Generic network device implementation
+
+### 2. Platform Layer (src/platform/)
+- Contains platform-specific implementations
+- Implements device traits for specific platforms
+- Handles platform-specific details
+- Key components:
+  - X86HttpClient: Platform-specific HTTP implementation
+  - Platform-specific error handling
+  - Platform-specific initialization
+
+### 3. Host Layer (src/host/)
+- Provides translation between host machine's communication protocol and platform layer
+- Handles host-specific requirements (block sizes, timing, caching for the host to efficiently receive data over its communication protocol)
+- Manages caching and buffering for host protocols
+- Key components:
+  - HostTranslator: Core host translation interface
+  - Platform-specific host implementations
+  - Host state management
+  - Resource allocation and cleanup
+
+### 4. FFI Layer (src/ffi/)
+- Provides C/C++ interface bindings
+- Handles C-Rust type conversions
+- Maps internal errors to C error codes
+- Key components:
+  - FFI function declarations
+  - Type conversion utilities
+  - Error code mapping
+  - Memory management utilities
+
+## Error Handling
+
+### Device Layer Errors
+- DeviceError enum for platform-agnostic errors
+- Protocol-specific error types
+- Connection state errors
+
+### Platform Layer Errors
+- Platform-specific error handling
+- Maps device errors to platform errors
+- Network-specific error conditions
+
+### Host Layer Errors
+- Host-specific error handling
+- Maps platform errors to host errors
+- Resource management errors
+
+### FFI Layer Errors
+- Standard error codes (FN_ERR_*)
+- Maps internal errors to standard codes
+- Maintains error state for C interface
+
+## Network Protocol Support
+
+### HTTP/HTTPS
+- Base implementation in device layer
+- Platform-specific implementation in platform layer
+- Host translation in host layer
+- C interface in FFI layer
+
+### Future Protocols
+- Add new protocol support in device layer
+- Implement platform support in platform layer
+- Add host translation in host layer
+- Add FFI bindings in FFI layer
+
+## Code Organization
+
+### Device Layer
+- src/device/network/
+  - protocols/: Protocol implementations
+  - network_device.rs: Core device implementation
+  - url.rs: URL parsing
+
+### Platform Layer
+- src/platform/x86/
+  - network/: Platform-specific network code
+  - http_client.rs: Platform HTTP implementation
+
+### Host Layer
+- src/host/
+  - translator.rs: Host translation interface
+  - platform/: Platform-specific host implementations
+  - state.rs: Host state management
+
+### FFI Layer
+- src/ffi/
+  - platform/: Platform-specific FFI
+  - device.rs: Device FFI bindings
+  - mod.rs: Common FFI utilities
+
+## Development Guidelines
+
+1. Keep platform-agnostic code in device layer
+2. Platform-specific code belongs in platform layer
+3. Host translation code belongs in host layer
+4. C interface code belongs in FFI layer
+5. Use existing error handling patterns
+6. Follow established protocol implementation patterns
+7. Maintain separation of concerns between layers
+8. Use existing URL parsing and protocol handling
+9. Add new protocols by extending existing patterns
+
+## Testing
+
+### Test Organization
+- All tests must be located in `fujinet-hal/tests/` directory
+- Tests are organized by layer and component:
+  - `tests/device/`: Device layer tests
+  - `tests/platform/`: Platform layer tests
+  - `tests/host/`: Host layer tests
+  - `tests/ffi/`: FFI layer tests
+  - `tests/c/`: C interface integration tests
+
+### Device Layer Tests (`tests/device/`)
+- Unit tests for core functionality
+  - `network_device_test.rs`: Network device implementation tests
+  - `url_test.rs`: URL parsing and validation tests
+  - `protocols/`: Protocol-specific test implementations
+- Test requirements:
+  - Must use async/await for async operations
+  - Must test error conditions and edge cases
+  - Must verify protocol-specific behavior
+  - Must use mock implementations where appropriate
+
+### Platform Layer Tests (`tests/platform/`)
+- Platform-specific implementation tests
+  - `x86/`: X86 platform specific tests
+  - `network/`: Network implementation tests
+- Test requirements:
+  - Must test platform-specific features
+  - Must verify integration with device layer
+  - Must test error handling and recovery
+  - Must use platform-specific test utilities
+
+### Host Layer Tests (`tests/host/`)
+- Host translation tests
+  - `translator_test.rs`: Host translation interface tests
+  - `platform/`: Platform-specific host tests
+  - `state_test.rs`: Host state management tests
+- Test requirements:
+  - Must verify correct translation between layers
+  - Must test resource management
+  - Must verify state handling
+  - Must test error propagation
+
+### FFI Layer Tests (`tests/ffi/`)
+- C interface binding tests
+  - `device_test.rs`: Device FFI tests
+  - `platform_test.rs`: Platform FFI tests
+  - `error_test.rs`: Error code mapping tests
+- Test requirements:
+  - Must verify correct type conversion
+  - Must test error code mapping
+  - Must verify memory safety
+  - Must test null pointer handling
+
+### C Interface Tests (`tests/c/`)
+- Integration tests for C interface
+  - `fujinet-network_test.c`: Network interface tests
+  - `fujinet-hal_test.c`: HAL interface tests
+- Test requirements:
+  - Must verify C interface contracts
+  - Must test error handling
+  - Must verify memory management
+  - Must test all exported functions
+
+### Test Guidelines
+1. Each test file should focus on a single component
+2. Use descriptive test names that indicate the test purpose
+3. Include both positive and negative test cases
+4. Document test requirements and assumptions
+5. Use appropriate test attributes (e.g., #[tokio::test])
+6. Follow the same layer separation as the main code
+7. Maintain test isolation and independence
+8. Use appropriate test fixtures and setup/teardown

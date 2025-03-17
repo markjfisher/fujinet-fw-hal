@@ -21,7 +21,7 @@ void print_response() {
     int16_t bytes_read = network_http_get(url, response_buffer, sizeof(response_buffer));
     if (bytes_read < 0) {
         print_error("network_http_get", -bytes_read);
-        return 1;
+        return;
     }
     printf("HTTP GET successful, received %d bytes\n", bytes_read);
     printf("Response:\n%s\n", response_buffer);
