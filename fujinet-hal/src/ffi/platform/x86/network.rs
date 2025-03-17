@@ -23,6 +23,14 @@ pub extern "C" fn network_open(devicespec: *const c_char, mode: u8, trans: u8) -
 
         // Use the device layer's network manager
         let mut manager = get_network_manager().lock().unwrap();
+
+        // Try to find existing device
+        if let Ok((device_id, _)) = manager.find_device(devicespec) {
+            // Close existing device
+            manager.close_device(device_id);
+        }
+
+        // Open new device
         device_result_to_error(manager.open_device(devicespec, mode, trans))
     }
 }
