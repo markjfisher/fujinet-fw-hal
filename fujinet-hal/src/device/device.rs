@@ -20,6 +20,9 @@ pub enum DeviceError {
     InvalidOperation,
     IoError(String),
     NetworkError(String),
+    UnsupportedProtocol,
+    InvalidUrl,
+    InvalidDeviceId,
 }
 
 impl From<std::io::Error> for DeviceError {

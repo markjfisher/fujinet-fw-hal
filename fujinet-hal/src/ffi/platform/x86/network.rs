@@ -1,48 +1,10 @@
 use std::ffi::c_char;
-use once_cell::sync::Lazy;
-use std::sync::Mutex;
-use crate::device::network::protocols::{HttpClient, is_protocol_supported};
-use crate::platform::x86::network::X86HttpClient;
-use crate::ffi::device_result_to_error;
-use crate::device::network::NetworkUrl;
-
-// Maximum number of network devices supported
-const MAX_NETWORK_DEVICES: usize = 8;
-
-#[derive(Default)]
-struct NetworkDeviceState {
-    mode: u8,
-    trans: u8,
-    url: Option<NetworkUrl>,
-    client: Option<Box<dyn HttpClient>>,
-}
-
-struct NetworkDeviceManager {
-    devices: [NetworkDeviceState; MAX_NETWORK_DEVICES],
-}
-
-impl NetworkDeviceManager {
-    fn new() -> Self {
-        Self {
-            devices: std::array::from_fn(|_| NetworkDeviceState::default()),
-        }
-    }
-
-    fn get_device(&mut self, device_id: usize) -> Option<&mut NetworkDeviceState> {
-        if device_id < MAX_NETWORK_DEVICES {
-            Some(&mut self.devices[device_id])
-        } else {
-            None
-        }
-    }
-}
-
-// Global state for C interface
-static DEVICE_MANAGER: Lazy<Mutex<NetworkDeviceManager>> = Lazy::new(|| Mutex::new(NetworkDeviceManager::new()));
+use crate::device::network::get_network_manager;
+use crate::ffi::{device_result_to_error, FN_ERR_BAD_CMD};
 
 #[no_mangle]
 pub extern "C" fn network_init() -> u8 {
-    // Initialize the device manager
+    // Initialize the network manager
     device_result_to_error(Ok(()))
 }
 
@@ -50,50 +12,18 @@ pub extern "C" fn network_init() -> u8 {
 pub extern "C" fn network_open(devicespec: *const c_char, mode: u8, trans: u8) -> u8 {
     unsafe {
         if devicespec.is_null() {
-            return 2; // FN_ERR_BAD_CMD
+            return FN_ERR_BAD_CMD;
         }
 
         // Convert C string to Rust string without taking ownership
         let devicespec = match std::ffi::CStr::from_ptr(devicespec).to_str() {
             Ok(s) => s,
-            Err(_) => return 2, // FN_ERR_BAD_CMD for invalid UTF-8
+            Err(_) => return FN_ERR_BAD_CMD,
         };
 
-        // Parse the network URL
-        let url = match NetworkUrl::parse(devicespec) {
-            Ok(url) => url,
-            Err(_) => return 2, // FN_ERR_BAD_CMD for invalid URL
-        };
-
-        // Validate the protocol scheme
-        match url.scheme() {
-            Ok(scheme) => {
-                if !is_protocol_supported(scheme) {
-                    return 2; // FN_ERR_BAD_CMD for unsupported protocol
-                }
-            }
-            Err(_) => return 2, // FN_ERR_BAD_CMD for invalid protocol
-        }
-
-        // Get the device ID from the URL (N1-N8)
-        let device_id = (url.unit - 1) as usize;
-
-        let mut manager = DEVICE_MANAGER.lock().unwrap();
-        if let Some(device) = manager.get_device(device_id) {
-            // Store the device state
-            device.mode = mode;
-            device.trans = trans;
-            device.url = Some(url);
-            
-            // Initialize the client if needed
-            if device.client.is_none() {
-                device.client = Some(Box::new(X86HttpClient::default()));
-            }
-
-            0 // FN_ERR_OK
-        } else {
-            2 // FN_ERR_BAD_CMD for invalid device ID
-        }
+        // Use the device layer's network manager
+        let mut manager = get_network_manager().lock().unwrap();
+        device_result_to_error(manager.open_device(devicespec, mode, trans))
     }
 }
 
