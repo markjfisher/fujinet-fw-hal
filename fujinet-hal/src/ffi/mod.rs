@@ -55,16 +55,6 @@ impl From<DeviceError> for FujiError {
 pub(crate) fn device_result_to_error(result: crate::device::DeviceResult<()>) -> u8 {
     match result {
         Ok(_) => FN_ERR_OK,
-        Err(e) => match e {
-            DeviceError::IoError(_) => FN_ERR_IO_ERROR,
-            DeviceError::NotReady => FN_ERR_OFFLINE,
-            DeviceError::NetworkError(_) => FN_ERR_WARNING,
-            DeviceError::UnsupportedProtocol | 
-            DeviceError::InvalidUrl | 
-            DeviceError::InvalidDeviceId |
-            DeviceError::InvalidProtocol |
-            DeviceError::InvalidOperation => FN_ERR_BAD_CMD,
-            DeviceError::NotSupported => FN_ERR_NO_DEVICE,
-        },
+        Err(e) => FujiError::from(e) as u8,
     }
 }
