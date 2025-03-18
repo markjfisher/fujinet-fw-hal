@@ -178,15 +178,21 @@ fn test_device_replacement() {
     
     // Get the device
     let device1 = manager.get_device(0);
-    assert!(device1.is_some());
-    
+    let device1_ref = device1.unwrap();
+
+    // check the url is correct
+    assert_eq!(device1_ref.url.as_ref().unwrap().url, "http://example1.com");
+
     // Open a new device with the same unit
     let result2 = manager.open_device("N1:http://example2.com", 8, 0);
     assert!(result2.is_ok());
     
     // Get the new device (same ID)
     let device2 = manager.get_device(0);
-    assert!(device2.is_some());
+    let device2_ref = device2.unwrap();
+
+    // check the url is correct
+    assert_eq!(device2_ref.url.as_ref().unwrap().url, "http://example2.com");
     
     // Verify that we can find the new URL
     let find_result = manager.find_device("N1:http://example2.com");
@@ -194,6 +200,14 @@ fn test_device_replacement() {
     if let Ok(option) = find_result {
         assert!(option.is_some());
     }
+
+    // TODO: Add this back in once we have a reason to support this
+    // // Verify that we don't find the device with a different URL
+    // let find_result = manager.find_device("N1:http://something_else.com");
+    // assert!(find_result.is_ok());
+    // if let Ok(option) = find_result {
+    //     assert!(option.is_none());
+    // }
     
     // Clean up
     manager.close_device(0);
