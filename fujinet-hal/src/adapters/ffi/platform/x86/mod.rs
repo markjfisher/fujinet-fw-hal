@@ -1,9 +1,8 @@
 use tokio::runtime::Runtime;
 use crate::platform::Platform;
-use crate::ffi::{FujiPlatform, FujiError};
+use crate::adapters::ffi::{FujiPlatform, FujiError};
 
 pub mod network;
-pub mod host;
 
 #[no_mangle]
 pub extern "C" fn fuji_platform_initialize(platform: *mut FujiPlatform) -> FujiError {

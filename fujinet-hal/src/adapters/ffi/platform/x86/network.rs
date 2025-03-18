@@ -1,6 +1,6 @@
 use std::ffi::c_char;
 use crate::device::network::get_network_manager;
-use crate::ffi::{device_result_to_error, FN_ERR_BAD_CMD};
+use crate::adapters::ffi::{device_result_to_error, FN_ERR_BAD_CMD};
 
 #[no_mangle]
 pub extern "C" fn network_init() -> u8 {

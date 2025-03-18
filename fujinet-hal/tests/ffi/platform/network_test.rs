@@ -1,5 +1,5 @@
 use std::ffi::CString;
-use fujinet_hal::ffi::platform::x86::network::{network_init, network_open};
+use fujinet_hal::adapters::ffi::platform::x86::network::{network_init, network_open};
 
 #[test]
 fn test_network_init() {
