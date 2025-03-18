@@ -1,8 +1,12 @@
 use std::ffi::CStr;
 use std::os::raw::c_char;
-use crate::adapters::ffi::{device_result_to_error, FN_ERR_BAD_CMD, FN_ERR_OK, FN_ERR_IO_ERROR, FN_ERR_NO_DEVICE};
-use crate::adapters::common::network::{DeviceOpenRequest, HttpPostRequest, open_device, http_post};
-use crate::adapters::common::error::AdapterError;
+use crate::adapters::common::network::global;
+use crate::adapters::common::network::{DeviceOpenRequest, HttpPostRequest};
+use crate::adapters::ffi::error::{
+    device_result_to_error,
+    adapter_result_to_ffi,
+    FN_ERR_BAD_CMD,
+};
 
 #[no_mangle]
 pub extern "C" fn network_init() -> u8 {
@@ -32,14 +36,8 @@ pub extern "C" fn network_open(devicespec: *const c_char, mode: u8, trans: u8) -
         translation: trans,
     };
 
-    // Use common open function
-    match open_device(request) {
-        Ok(_) => FN_ERR_OK,
-        Err(AdapterError::InvalidDeviceSpec) => FN_ERR_BAD_CMD,
-        Err(AdapterError::InvalidMode) => FN_ERR_BAD_CMD,
-        Err(AdapterError::InvalidTranslation) => FN_ERR_BAD_CMD,
-        Err(AdapterError::DeviceError(_)) => FN_ERR_IO_ERROR,
-    }
+    // Use global open function and map result to FFI error code
+    adapter_result_to_ffi(global::open_device(request))
 }
 
 #[no_mangle]
@@ -66,13 +64,8 @@ pub extern "C" fn network_http_post(devicespec: *const c_char, data: *const c_ch
         data,
     };
 
-    // Use common http_post function
-    match http_post(request) {
-        Ok(_) => FN_ERR_OK,
-        Err(AdapterError::InvalidDeviceSpec) => FN_ERR_BAD_CMD,
-        Err(AdapterError::DeviceError(_)) => FN_ERR_NO_DEVICE,
-        _ => FN_ERR_IO_ERROR,
-    }
+    // Use global http_post function and map result to FFI error code
+    adapter_result_to_ffi(global::http_post(request))
 }
 
 // #[no_mangle]

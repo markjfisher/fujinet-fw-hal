@@ -6,19 +6,39 @@ use crate::device::network::protocols::is_protocol_supported;
 use crate::device::DeviceError;
 use crate::device::DeviceResult;
 
-pub struct NetworkManager {
+/// Interface for network manager operations
+pub trait NetworkManager {
+    /// Parses and validates a network URL, returning the device ID and URL
+    fn parse_device_spec(&self, spec: &str) -> DeviceResult<(usize, NetworkUrl)>;
+
+    /// Opens a new device with the given spec, mode, and trans
+    fn open_device(&mut self, spec: &str, mode: u8, trans: u8) -> DeviceResult<()>;
+
+    /// Finds a device by its spec, returning the device ID and state if found
+    fn find_device(&mut self, spec: &str) -> DeviceResult<Option<(usize, &mut DeviceState)>>;
+
+    /// Gets a device by its ID
+    fn get_device(&mut self, device_id: usize) -> Option<&mut DeviceState>;
+
+    /// Closes a device by its ID
+    fn close_device(&mut self, device_id: usize) -> bool;
+}
+
+/// Concrete implementation of the NetworkManager trait
+pub struct NetworkManagerImpl {
     device_manager: DeviceManager,
 }
 
-impl NetworkManager {
+impl NetworkManagerImpl {
     pub fn new() -> Self {
         Self {
             device_manager: DeviceManager::new(),
         }
     }
+}
 
-    /// Parses and validates a network URL, returning the device ID and URL
-    pub fn parse_device_spec(&self, spec: &str) -> DeviceResult<(usize, NetworkUrl)> {
+impl NetworkManager for NetworkManagerImpl {
+    fn parse_device_spec(&self, spec: &str) -> DeviceResult<(usize, NetworkUrl)> {
         // Parse the network URL
         let url = NetworkUrl::parse(spec)?;
 
@@ -40,10 +60,7 @@ impl NetworkManager {
         Ok((device_id, url))
     }
 
-    /// Finds a device by its spec, returning the device ID and state if found
-    /// Returns an error if the devicespec is invalid
-    /// Returns None if the devicespec is valid but no device was found with that ID
-    pub fn find_device(&mut self, spec: &str) -> DeviceResult<Option<(usize, &mut DeviceState)>> {
+    fn find_device(&mut self, spec: &str) -> DeviceResult<Option<(usize, &mut DeviceState)>> {
         let (device_id, _) = self.parse_device_spec(spec)?;
         
         if let Some(device) = self.device_manager.get_device(device_id) {
@@ -58,8 +75,7 @@ impl NetworkManager {
         }
     }
 
-    /// Opens a new device with the given spec, mode, and trans
-    pub fn open_device(&mut self, spec: &str, mode: u8, trans: u8) -> DeviceResult<()> {
+    fn open_device(&mut self, spec: &str, mode: u8, trans: u8) -> DeviceResult<()> {
         let (device_id, url) = self.parse_device_spec(spec)?;
 
         // Set device state
@@ -70,13 +86,11 @@ impl NetworkManager {
         Ok(())
     }
 
-    /// Gets a device by its ID
-    pub fn get_device(&mut self, device_id: usize) -> Option<&mut DeviceState> {
+    fn get_device(&mut self, device_id: usize) -> Option<&mut DeviceState> {
         self.device_manager.get_device(device_id)
     }
 
-    /// Closes a device by its ID
-    pub fn close_device(&mut self, device_id: usize) -> bool {
+    fn close_device(&mut self, device_id: usize) -> bool {
         if let Some(device) = self.device_manager.get_device(device_id) {
             device.url = None;
             device.client = None;
@@ -90,10 +104,10 @@ impl NetworkManager {
 }
 
 // Global network manager
-static NETWORK_MANAGER: Lazy<Mutex<NetworkManager>> = Lazy::new(|| {
-    Mutex::new(NetworkManager::new())
+static NETWORK_MANAGER: Lazy<Mutex<NetworkManagerImpl>> = Lazy::new(|| {
+    Mutex::new(NetworkManagerImpl::new())
 });
 
-pub fn get_network_manager() -> &'static Mutex<NetworkManager> {
+pub fn get_network_manager() -> &'static Mutex<impl NetworkManager> {
     &NETWORK_MANAGER
 } 

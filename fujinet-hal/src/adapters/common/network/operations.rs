@@ -1,6 +1,6 @@
-use crate::device::network::manager::get_network_manager;
-use super::error::AdapterError;
 use crate::device::DeviceError;
+use crate::adapters::common::error::AdapterError;
+use crate::device::network::manager::{NetworkManager, get_network_manager as get_manager};
 
 /// Common request structure for opening a network device
 #[derive(Debug)]
@@ -25,15 +25,16 @@ pub struct HttpPostRequest {
 /// Opens a network device with the given parameters
 /// 
 /// # Arguments
+/// * `manager` - The network manager implementation
 /// * `request` - The device open request containing specification, mode and translation
 /// 
 /// # Returns
 /// * `Ok(usize)` - The device ID if successful
 /// * `Err(AdapterError)` - The error if opening failed
-pub fn open_device(request: DeviceOpenRequest) -> Result<usize, AdapterError> {
-    let manager = get_network_manager();
-    let mut manager = manager.lock().unwrap();
-    
+pub fn open_device(
+    manager: &mut impl NetworkManager,
+    request: DeviceOpenRequest
+) -> Result<usize, AdapterError> {
     // Parse and validate the device specification
     let (device_id, _url) = manager.parse_device_spec(&request.device_spec)
         .map_err(|_| AdapterError::InvalidDeviceSpec)?;
@@ -48,15 +49,16 @@ pub fn open_device(request: DeviceOpenRequest) -> Result<usize, AdapterError> {
 /// Closes a network device
 /// 
 /// # Arguments
+/// * `manager` - The network manager implementation
 /// * `device_id` - The ID of the device to close
 /// 
 /// # Returns
 /// * `Ok(())` - If the device was closed successfully
 /// * `Err(AdapterError)` - If closing failed
-pub fn close_device(device_id: usize) -> Result<(), AdapterError> {
-    let manager = get_network_manager();
-    let mut manager = manager.lock().unwrap();
-    
+pub fn close_device(
+    manager: &mut impl NetworkManager,
+    device_id: usize
+) -> Result<(), AdapterError> {
     if !manager.close_device(device_id) {
         return Err(AdapterError::DeviceError(DeviceError::InvalidUrl));
     }
@@ -67,15 +69,16 @@ pub fn close_device(device_id: usize) -> Result<(), AdapterError> {
 /// Performs an HTTP POST request
 /// 
 /// # Arguments
+/// * `manager` - The network manager implementation
 /// * `request` - The HTTP POST request containing device spec and data
 /// 
 /// # Returns
 /// * `Ok(())` - If the POST was successful
 /// * `Err(AdapterError)` - If the POST failed
-pub fn http_post(request: HttpPostRequest) -> Result<(), AdapterError> {
-    let manager = get_network_manager();
-    let mut manager = manager.lock().unwrap();
-    
+pub fn http_post(
+    manager: &mut impl NetworkManager,
+    request: HttpPostRequest
+) -> Result<(), AdapterError> {
     // Find the device
     let (_device_id, device) = manager.find_device(&request.device_spec)
         .map_err(|_| AdapterError::InvalidDeviceSpec)?
@@ -93,4 +96,27 @@ pub fn http_post(request: HttpPostRequest) -> Result<(), AdapterError> {
         .map_err(AdapterError::from)?;
 
     Ok(())
+}
+
+// Public wrapper functions that use the global manager
+pub mod global {
+    use super::*;
+    
+    pub fn open_device(request: DeviceOpenRequest) -> Result<usize, AdapterError> {
+        let manager = get_manager();
+        let mut manager = manager.lock().unwrap();
+        super::open_device(&mut *manager, request)
+    }
+
+    pub fn close_device(device_id: usize) -> Result<(), AdapterError> {
+        let manager = get_manager();
+        let mut manager = manager.lock().unwrap();
+        super::close_device(&mut *manager, device_id)
+    }
+
+    pub fn http_post(request: HttpPostRequest) -> Result<(), AdapterError> {
+        let manager = get_manager();
+        let mut manager = manager.lock().unwrap();
+        super::http_post(&mut *manager, request)
+    }
 } 
