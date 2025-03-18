@@ -106,8 +106,6 @@ In order to work as an application, or a library, this project follows Hardware 
 ### HTTP/HTTPS
 - Base implementation in device layer
 - Platform-specific implementation in platform layer
-- Host translation in host layer
-- C interface in FFI layer
 
 ### Future Protocols
 - Add new protocol support in device layer

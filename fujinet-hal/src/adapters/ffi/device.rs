@@ -1,7 +1,45 @@
 use libc::size_t;
 use tokio::runtime::Runtime;
 use crate::device::Device;
-use super::{FujiDevice, FujiError};
+use crate::device::DeviceError;
+use crate::adapters::ffi::{FN_ERR_OK, FN_ERR_IO_ERROR, FN_ERR_OFFLINE, FN_ERR_NO_DEVICE, FN_ERR_BAD_CMD, FN_ERR_WARNING};
+use super::FujiDevice;
+
+// Error codes for C
+#[repr(C)]
+#[derive(Debug)]
+pub enum FujiError {
+    Ok = FN_ERR_OK as isize,
+    IoError = FN_ERR_IO_ERROR as isize,
+    NotReady = FN_ERR_OFFLINE as isize,
+    NotSupported = FN_ERR_NO_DEVICE as isize,
+    InvalidParameter = FN_ERR_BAD_CMD as isize,
+    NetworkError = FN_ERR_WARNING as isize,
+}
+
+impl From<DeviceError> for FujiError {
+    fn from(err: DeviceError) -> Self {
+        match err {
+            DeviceError::IoError(_) => FujiError::IoError,
+            DeviceError::NotReady => FujiError::NotReady,
+            DeviceError::NotSupported => FujiError::NotSupported,
+            DeviceError::InvalidProtocol => FujiError::InvalidParameter,
+            DeviceError::InvalidOperation => FujiError::InvalidParameter,
+            DeviceError::NetworkError(_) => FujiError::NetworkError,
+            DeviceError::UnsupportedProtocol => FujiError::InvalidParameter,
+            DeviceError::InvalidUrl => FujiError::InvalidParameter,
+            DeviceError::InvalidDeviceId => FujiError::InvalidParameter,
+        }
+    }
+}
+
+// Common error conversion function
+pub(crate) fn device_result_to_error(result: crate::device::DeviceResult<()>) -> u8 {
+    match result {
+        Ok(_) => FN_ERR_OK,
+        Err(e) => FujiError::from(e) as u8,
+    }
+}
 
 #[no_mangle]
 pub extern "C" fn fuji_device_open(device: *mut FujiDevice) -> FujiError {

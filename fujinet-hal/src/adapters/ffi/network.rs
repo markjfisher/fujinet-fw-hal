@@ -1,6 +1,8 @@
-use std::ffi::c_char;
-use crate::device::network::get_network_manager;
-use crate::adapters::ffi::{device_result_to_error, FN_ERR_BAD_CMD};
+use std::ffi::CStr;
+use std::os::raw::c_char;
+use crate::adapters::ffi::{device_result_to_error, FN_ERR_BAD_CMD, FN_ERR_OK, FN_ERR_IO_ERROR};
+use crate::adapters::common::network::{DeviceOpenRequest, open_device};
+use crate::adapters::common::error::AdapterError;
 
 #[no_mangle]
 pub extern "C" fn network_init() -> u8 {
@@ -10,28 +12,33 @@ pub extern "C" fn network_init() -> u8 {
 
 #[no_mangle]
 pub extern "C" fn network_open(devicespec: *const c_char, mode: u8, trans: u8) -> u8 {
-    unsafe {
-        if devicespec.is_null() {
-            return FN_ERR_BAD_CMD;
+    // Validate devicespec pointer
+    if devicespec.is_null() {
+        return FN_ERR_BAD_CMD;
+    }
+
+    // Convert C string to Rust string
+    let device_spec = unsafe {
+        match CStr::from_ptr(devicespec).to_str() {
+            Ok(s) => s.to_string(),
+            Err(_) => return FN_ERR_BAD_CMD
         }
+    };
 
-        // Convert C string to Rust string without taking ownership
-        let devicespec = match std::ffi::CStr::from_ptr(devicespec).to_str() {
-            Ok(s) => s,
-            Err(_) => return FN_ERR_BAD_CMD,
-        };
+    // Create the request
+    let request = DeviceOpenRequest {
+        device_spec,
+        mode,
+        translation: trans,
+    };
 
-        // Use the device layer's network manager
-        let mut manager = get_network_manager().lock().unwrap();
-
-        // Try to find existing device
-        if let Ok(Some((device_id, _))) = manager.find_device(devicespec) {
-            // Close existing device
-            manager.close_device(device_id);
-        }
-
-        // Open new device
-        device_result_to_error(manager.open_device(devicespec, mode, trans))
+    // Use common open function
+    match open_device(request) {
+        Ok(_) => FN_ERR_OK,
+        Err(AdapterError::InvalidDeviceSpec) => FN_ERR_BAD_CMD,
+        Err(AdapterError::InvalidMode) => FN_ERR_BAD_CMD,
+        Err(AdapterError::InvalidTranslation) => FN_ERR_BAD_CMD,
+        Err(AdapterError::DeviceError(_)) => FN_ERR_IO_ERROR,
     }
 }
 
