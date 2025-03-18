@@ -15,7 +15,7 @@ pub trait NetworkDevice: Device + Send + Sync {
 
     /// Opens a network connection using the specified URL
     /// The URL determines which protocol handler to use
-    async fn open(&mut self, url: &NetworkUrl) -> DeviceResult<()>;
+    async fn open_url(&mut self, url: &NetworkUrl) -> DeviceResult<()>;
 }
 
 pub struct NetworkDeviceImpl<P: ProtocolHandler + 'static> {
@@ -37,6 +37,23 @@ impl<P: ProtocolHandler> NetworkDeviceImpl<P> {
 
     pub fn protocol_mut(&mut self) -> &mut P {
         &mut self.protocol
+    }
+}
+
+#[async_trait]
+impl<P: ProtocolHandler> NetworkDevice for NetworkDeviceImpl<P> {
+    async fn connect(&mut self, endpoint: &str) -> DeviceResult<()> {
+        self.endpoint = endpoint.to_string();
+        self.protocol.open(endpoint).await
+    }
+
+    async fn disconnect(&mut self) -> DeviceResult<()> {
+        self.protocol.close().await
+    }
+
+    async fn open_url(&mut self, url: &NetworkUrl) -> DeviceResult<()> {
+        self.endpoint = url.url.clone();
+        self.protocol.open(&self.endpoint).await
     }
 }
 
@@ -89,7 +106,7 @@ impl<P: ProtocolHandler> Device for NetworkDeviceImpl<P> {
 }
 
 // Factory function to create the right device type based on URL
-pub fn new_network_device(endpoint: String) -> DeviceResult<Box<dyn Device>> {
+pub fn new_network_device(endpoint: String) -> DeviceResult<Box<dyn NetworkDevice>> {
     let parsed = NetworkUrl::parse(&endpoint)?;
     let scheme = parsed.scheme()?;
     
