@@ -1,3 +1,3 @@
 mod device;
 mod platform;
-mod ffi; 
+mod adapters; 
