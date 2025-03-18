@@ -1,10 +1,10 @@
 use std::sync::Mutex;
-use once_cell::sync::Lazy;
 use crate::device::manager::{DeviceManager, DeviceState};
 use crate::device::network::NetworkUrl;
 use crate::device::network::protocols::is_protocol_supported;
 use crate::device::DeviceError;
 use crate::device::DeviceResult;
+use crate::device::network::protocols::HttpClientProvider;
 
 /// Interface for network manager operations
 pub trait NetworkManager {
@@ -27,12 +27,14 @@ pub trait NetworkManager {
 /// Concrete implementation of the NetworkManager trait
 pub struct NetworkManagerImpl {
     device_manager: DeviceManager,
+    client_provider: Box<dyn HttpClientProvider>,
 }
 
 impl NetworkManagerImpl {
-    pub fn new() -> Self {
+    pub fn new(client_provider: Box<dyn HttpClientProvider>) -> Self {
         Self {
             device_manager: DeviceManager::new(),
+            client_provider,
         }
     }
 }
@@ -79,8 +81,16 @@ impl NetworkManager for NetworkManagerImpl {
         let (device_id, url) = self.parse_device_spec(spec)?;
 
         // Set device state
-        if !self.device_manager.set_device_state(device_id, mode, trans, url) {
+        if !self.device_manager.set_device_state(device_id, mode, trans, url.clone()) {
             return Err(DeviceError::InvalidDeviceId);
+        }
+
+        // Create and attach HTTP client if it's an HTTP URL
+        if let Ok(scheme) = url.scheme() {
+            if scheme == "http" || scheme == "https" {
+                let client = self.client_provider.create_http_client();
+                self.device_manager.set_device_client(device_id, client);
+            }
         }
 
         Ok(())
@@ -101,13 +111,4 @@ impl NetworkManager for NetworkManagerImpl {
             false
         }
     }
-}
-
-// Global network manager
-static NETWORK_MANAGER: Lazy<Mutex<NetworkManagerImpl>> = Lazy::new(|| {
-    Mutex::new(NetworkManagerImpl::new())
-});
-
-pub fn get_network_manager() -> &'static Mutex<impl NetworkManager> {
-    &NETWORK_MANAGER
 } 
