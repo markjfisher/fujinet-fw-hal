@@ -41,13 +41,20 @@ impl NetworkManager {
     }
 
     /// Finds a device by its spec, returning the device ID and state if found
-    pub fn find_device(&mut self, spec: &str) -> DeviceResult<(usize, &mut DeviceState)> {
+    /// Returns an error if the devicespec is invalid
+    /// Returns None if the devicespec is valid but no device was found with that ID
+    pub fn find_device(&mut self, spec: &str) -> DeviceResult<Option<(usize, &mut DeviceState)>> {
         let (device_id, _) = self.parse_device_spec(spec)?;
         
         if let Some(device) = self.device_manager.get_device(device_id) {
-            Ok((device_id, device))
+            // Consider a device "found" only if it has a URL (has been opened)
+            if device.url.is_some() {
+                Ok(Some((device_id, device)))
+            } else {
+                Ok(None)
+            }
         } else {
-            Err(DeviceError::InvalidDeviceId)
+            Ok(None)
         }
     }
 
@@ -70,11 +77,15 @@ impl NetworkManager {
 
     /// Closes a device by its ID
     pub fn close_device(&mut self, device_id: usize) -> bool {
-        let empty_url = NetworkUrl {
-            unit: 1,
-            url: String::new(),
-        };
-        self.device_manager.set_device_state(device_id, 0, 0, empty_url)
+        if let Some(device) = self.device_manager.get_device(device_id) {
+            device.url = None;
+            device.client = None;
+            device.mode = 0;
+            device.trans = 0;
+            true
+        } else {
+            false
+        }
     }
 }
 
