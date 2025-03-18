@@ -1,4 +1,3 @@
-use std::sync::Mutex;
 use crate::device::manager::{DeviceManager, DeviceState};
 use crate::device::network::NetworkUrl;
 use crate::device::network::protocols::is_protocol_supported;

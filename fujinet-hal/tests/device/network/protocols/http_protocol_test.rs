@@ -1,7 +1,7 @@
 use fujinet_hal::device::{DeviceError, DeviceResult};
 use fujinet_hal::device::network::protocols::{HttpProtocol, ProtocolHandler, ConnectionStatus};
-use fujinet_hal::device::network::HttpProtocolHandler;
 use super::test_utils::{TestHttpClient, TestHttpClientHelpers};
+use fujinet_hal::device::network::protocols::http::HttpProtocolHandler;
 
 #[tokio::test]
 async fn test_http_protocol_default_and_clone() {

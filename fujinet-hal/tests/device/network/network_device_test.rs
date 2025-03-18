@@ -1,8 +1,8 @@
 use async_trait::async_trait;
 use fujinet_hal::device::{Device, DeviceResult, DeviceStatus};
 use fujinet_hal::device::network::protocols::{ProtocolHandler, ConnectionStatus};
-use fujinet_hal::device::network::{NetworkDeviceImpl, new_network_device};
 use fujinet_hal::device::network::protocols::http::HttpProtocol;
+use fujinet_hal::device::network::{NetworkDeviceImpl, new_network_device};
 use std::sync::{Arc, Mutex};
 
 #[derive(Default)]

@@ -1,6 +1,7 @@
+use crate::device::network::manager::NetworkManager;
+use crate::platform::x86::network::get_network_manager as get_manager;
 use crate::device::DeviceError;
 use crate::adapters::common::error::AdapterError;
-use crate::device::network::manager::{NetworkManager, get_network_manager as get_manager};
 
 /// Common request structure for opening a network device
 #[derive(Debug)]

@@ -1,9 +1,19 @@
 use fujinet_hal::device::network::manager::{NetworkManagerImpl, NetworkManager};
 use fujinet_hal::device::DeviceError;
+use fujinet_hal::device::network::protocols::{HttpClient, HttpClientProvider};
+use crate::common::MockHttpClient;
+
+struct MockHttpClientProvider;
+
+impl HttpClientProvider for MockHttpClientProvider {
+    fn create_http_client(&self) -> Box<dyn HttpClient> {
+        Box::new(MockHttpClient::new())
+    }
+}
 
 #[test]
 fn test_parse_device_spec_valid() {
-    let manager = NetworkManagerImpl::new();
+    let manager = NetworkManagerImpl::new(Box::new(MockHttpClientProvider));
     
     // Test default unit (N:)
     let result = manager.parse_device_spec("N:http://example.com");
@@ -27,7 +37,7 @@ fn test_parse_device_spec_valid() {
 
 #[test]
 fn test_parse_device_spec_invalid() {
-    let manager = NetworkManagerImpl::new();
+    let manager = NetworkManagerImpl::new(Box::new(MockHttpClientProvider));
     
     // Test invalid URL format
     let result = manager.parse_device_spec("not_a_valid_url");
@@ -55,7 +65,7 @@ fn test_parse_device_spec_invalid() {
 
 #[test]
 fn test_open_close_device() {
-    let mut manager = NetworkManagerImpl::new();
+    let mut manager = NetworkManagerImpl::new(Box::new(MockHttpClientProvider));
     
     // Open a device
     let result = manager.open_device("N1:http://example.com", 4, 0);
@@ -87,7 +97,7 @@ fn test_open_close_device() {
 
 #[test]
 fn test_find_device() {
-    let mut manager = NetworkManagerImpl::new();
+    let mut manager = NetworkManagerImpl::new(Box::new(MockHttpClientProvider));
     
     // Try to find a device that hasn't been opened yet
     let spec = "N1:http://example.com";
@@ -133,7 +143,7 @@ fn test_find_device() {
 
 #[test]
 fn test_multiple_devices() {
-    let mut manager = NetworkManagerImpl::new();
+    let mut manager = NetworkManagerImpl::new(Box::new(MockHttpClientProvider));
     
     // Open multiple devices
     for i in 1..=4 {
@@ -170,7 +180,7 @@ fn test_multiple_devices() {
 
 #[test]
 fn test_device_replacement() {
-    let mut manager = NetworkManagerImpl::new();
+    let mut manager = NetworkManagerImpl::new(Box::new(MockHttpClientProvider));
     
     // Open a device
     let result1 = manager.open_device("N1:http://example1.com", 4, 0);
