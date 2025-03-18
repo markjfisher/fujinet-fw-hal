@@ -1,7 +1,7 @@
 use std::ffi::CStr;
 use std::os::raw::c_char;
-use crate::adapters::ffi::{device_result_to_error, FN_ERR_BAD_CMD, FN_ERR_OK, FN_ERR_IO_ERROR};
-use crate::adapters::common::network::{DeviceOpenRequest, open_device};
+use crate::adapters::ffi::{device_result_to_error, FN_ERR_BAD_CMD, FN_ERR_OK, FN_ERR_IO_ERROR, FN_ERR_NO_DEVICE};
+use crate::adapters::common::network::{DeviceOpenRequest, HttpPostRequest, open_device, http_post};
 use crate::adapters::common::error::AdapterError;
 
 #[no_mangle]
@@ -42,34 +42,38 @@ pub extern "C" fn network_open(devicespec: *const c_char, mode: u8, trans: u8) -
     }
 }
 
-// #[no_mangle]
-// pub extern "C" fn network_http_post(devicespec: *const c_char, data: *const c_char) -> u8 {
-//     unsafe {
-//         if devicespec.is_null() || data.is_null() {
-//             return 2; // FN_ERR_BAD_CMD
-//         }
+#[no_mangle]
+pub extern "C" fn network_http_post(devicespec: *const c_char, data: *const c_char) -> u8 {
+    // Validate pointers
+    if devicespec.is_null() || data.is_null() {
+        return FN_ERR_BAD_CMD;
+    }
 
-//         // Convert C strings to Rust strings without taking ownership
-//         let devicespec = match std::ffi::CStr::from_ptr(devicespec).to_str() {
-//             Ok(s) => s,
-//             Err(_) => return 2, // FN_ERR_BAD_CMD for invalid UTF-8
-//         };
-        
-//         let data = match std::ffi::CStr::from_ptr(data).to_str() {
-//             Ok(s) => s.as_bytes(),
-//             Err(_) => return 2, // FN_ERR_BAD_CMD for invalid UTF-8
-//         };
+    // Convert C strings to Rust strings
+    let (device_spec, data) = unsafe {
+        match (
+            CStr::from_ptr(devicespec).to_str(),
+            CStr::from_ptr(data).to_str()
+        ) {
+            (Ok(d), Ok(p)) => (d.to_string(), p.as_bytes().to_vec()),
+            _ => return FN_ERR_BAD_CMD
+        }
+    };
 
-//         let mut client = HTTP_CLIENT.lock().unwrap();
-//         if let Some(client) = client.as_mut() {
-//             let rt = Runtime::new().unwrap();
-//             let result = rt.block_on(client.post(devicespec, data));
-//             device_result_to_error(result.map(|_| ()))
-//         } else {
-//             5 // FN_ERR_NO_DEVICE
-//         }
-//     }
-// }
+    // Create the request
+    let request = HttpPostRequest {
+        device_spec,
+        data,
+    };
+
+    // Use common http_post function
+    match http_post(request) {
+        Ok(_) => FN_ERR_OK,
+        Err(AdapterError::InvalidDeviceSpec) => FN_ERR_BAD_CMD,
+        Err(AdapterError::DeviceError(_)) => FN_ERR_NO_DEVICE,
+        _ => FN_ERR_IO_ERROR,
+    }
+}
 
 // #[no_mangle]
 // pub extern "C" fn network_http_post_bin(
