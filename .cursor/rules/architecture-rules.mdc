@@ -45,17 +45,21 @@ In order to work as an application, or a library, this project follows Hardware 
   - Platform-specific error handling
   - Platform-specific initialization
 
-### 3. Host Layer (src/host/)
-- Provides translation between host machine's communication protocol and platform layer
-- Handles host-specific requirements (block sizes, timing, caching for the host to efficiently receive data over its communication protocol)
-- Manages caching and buffering for host protocols
-- Key components:
-  - HostTranslator: Core host translation interface
-  - Platform-specific host implementations
-  - Host state management
-  - Resource allocation and cleanup
+### 3. Adapters Layer (src/adapters/)
+- Provides adapters for different ways of accessing the library:
+  - FFI: Direct C/C++ library integration
+  - SIO: Atari serial interface protocol
+  - SmartPort: Apple II disk protocol
+  - TCP: Network socket based protocol
+  - HTTP: RESTful web service
+- Each adapter implements its own:
+  - Request/response handling
+  - Protocol-specific state management
+  - Error mapping
+  - Resource management
 
-### 4. FFI Layer (src/ffi/)
+### 4. FFI Adapter (src/adapters/ffi/)
+- An adapter type when including the project as a library in the client application directly without any communication separation like SIO, serial, SmartPort etc.
 - Provides C/C++ interface bindings
 - Handles C-Rust type conversions
 - Maps internal errors to C error codes
@@ -88,15 +92,14 @@ In order to work as an application, or a library, this project follows Hardware 
 - Maps device errors to platform errors
 - Network-specific error conditions
 
-### Host Layer Errors
-- Host-specific error handling
-- Maps platform errors to host errors
-- Resource management errors
-
-### FFI Layer Errors
-- Standard error codes (FN_ERR_*)
-- Maps internal errors to standard codes
-- Maintains error state for C interface
+### Adapter Layer Errors
+- Each adapter defines its own error types/codes
+- Maps platform and device errors to protocol-specific errors
+- Handles protocol-specific error states
+- Examples:
+  - FFI: FN_ERR_* C error codes
+  - SIO: Atari error codes
+  - HTTP: Standard HTTP status codes
 
 ## Network Protocol Support
 
@@ -109,56 +112,39 @@ In order to work as an application, or a library, this project follows Hardware 
 ### Future Protocols
 - Add new protocol support in device layer
 - Implement platform support in platform layer
-- Add host translation in host layer
-- Add FFI bindings in FFI layer
-
-## Code Organization
-
-### Device Layer
-- src/device/network/
-  - protocols/: Protocol implementations
-  - network_device.rs: Core device implementation
-  - url.rs: URL parsing
-
-### Platform Layer
-- src/platform/x86/
-  - network/: Platform-specific network code
-  - http_client.rs: Platform HTTP implementation
-
-### Host Layer
-- src/host/
-  - translator.rs: Host translation interface
-  - platform/: Platform-specific host implementations
-  - state.rs: Host state management
-
-### FFI Layer
-- src/ffi/
-  - platform/: Platform-specific FFI
-  - device.rs: Device FFI bindings
-  - mod.rs: Common FFI utilities
+- Create new adapter in adapters/ for protocol-specific client interface
 
 ## Development Guidelines
 
-1. Keep platform-agnostic code in device layer
+1. Keep platform-agnostic device concept related code in device layer
 2. Platform-specific code belongs in platform layer
-3. Host translation code belongs in host layer
-4. C interface code belongs in FFI layer
+3. Adapters are managed as sub-folders in the Adapters layer
+4. C interface code belongs in FFI layer as an example adapter
 5. Use existing error handling patterns
 6. Follow established protocol implementation patterns
 7. Maintain separation of concerns between layers
 8. Use existing URL parsing and protocol handling
 9. Add new protocols by extending existing patterns
 
+## Adapter Development Guidelines
+1. Create new adapters only for concrete use cases
+2. Each adapter should be self-contained in its subdirectory
+3. Implement clear request/response patterns
+4. Handle protocol-specific error mapping
+5. Document protocol specifications and requirements
+6. Provide protocol-specific examples and tests
+
 ## Testing
 
 ### Test Organization
-- All tests must be located in `fujinet-hal/tests/` directory
-- Tests are organized by layer and component:
-  - `tests/device/`: Device layer tests
-  - `tests/platform/`: Platform layer tests
-  - `tests/host/`: Host layer tests
-  - `tests/ffi/`: FFI layer tests
-  - `tests/c/`: C interface integration tests
+- Tests organized by layer:
+  - `tests/device/`: Core device implementations
+  - `tests/platform/`: Platform-specific features
+  - `tests/adapters/`: Protocol adapter tests
+    - `ffi/`: C interface tests
+    - `sio/`: Atari protocol tests
+    - `smartport/`: Apple II protocol tests
+    - etc.
 
 ### Device Layer Tests (`tests/device/`)
 - Unit tests for core functionality
@@ -181,18 +167,7 @@ In order to work as an application, or a library, this project follows Hardware 
   - Must test error handling and recovery
   - Must use platform-specific test utilities
 
-### Host Layer Tests (`tests/host/`)
-- Host translation tests
-  - `translator_test.rs`: Host translation interface tests
-  - `platform/`: Platform-specific host tests
-  - `state_test.rs`: Host state management tests
-- Test requirements:
-  - Must verify correct translation between layers
-  - Must test resource management
-  - Must verify state handling
-  - Must test error propagation
-
-### FFI Layer Tests (`tests/ffi/`)
+### FFI Adapter Layer Tests (`tests/adapters/ffi/`)
 - C interface binding tests
   - `device_test.rs`: Device FFI tests
   - `platform_test.rs`: Platform FFI tests
@@ -206,7 +181,6 @@ In order to work as an application, or a library, this project follows Hardware 
 ### C Interface Tests (`tests/c/`)
 - Integration tests for C interface
   - `fujinet-network_test.c`: Network interface tests
-  - `fujinet-hal_test.c`: HAL interface tests
 - Test requirements:
   - Must verify C interface contracts
   - Must test error handling
