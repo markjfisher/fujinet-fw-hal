@@ -2,6 +2,8 @@ use crate::device::network::manager::NetworkManager;
 use crate::platform::x86::network::get_network_manager as get_manager;
 use crate::device::DeviceError;
 use crate::adapters::common::error::AdapterError;
+use tokio::runtime::Runtime;
+use crate::device::network::protocols::http::{HttpProtocol, HttpProtocolHandler};
 
 /// Common request structure for opening a network device
 #[derive(Debug)]
@@ -40,8 +42,9 @@ pub fn open_device(
     let (device_id, _url) = manager.parse_device_spec(&request.device_spec)
         .map_err(|_| AdapterError::InvalidDeviceSpec)?;
 
-    // Open the device with the specified parameters
-    manager.open_device(&request.device_spec, request.mode, request.translation)
+    // Create runtime and execute open_device
+    let rt = Runtime::new().unwrap();
+    rt.block_on(manager.open_device(&request.device_spec, request.mode, request.translation))
         .map_err(AdapterError::from)?;
 
     Ok(device_id)
@@ -60,7 +63,12 @@ pub fn close_device(
     manager: &mut impl NetworkManager,
     device_id: usize
 ) -> Result<(), AdapterError> {
-    if !manager.close_device(device_id) {
+    // Create runtime and execute close_device
+    let rt = Runtime::new().unwrap();
+    let closed = rt.block_on(manager.close_device(device_id))
+        .map_err(AdapterError::from)?;
+
+    if !closed {
         return Err(AdapterError::DeviceError(DeviceError::InvalidUrl));
     }
 
@@ -80,19 +88,23 @@ pub fn http_post(
     manager: &mut impl NetworkManager,
     request: HttpPostRequest
 ) -> Result<(), AdapterError> {
-    // Find the device
-    let (_device_id, device) = manager.find_device(&request.device_spec)
-        .map_err(|_| AdapterError::InvalidDeviceSpec)?
+    let rt = Runtime::new().unwrap();
+    
+    // Parse device spec to get device ID and URL
+    let (device_id, url) = manager.parse_device_spec(&request.device_spec)
+        .map_err(|_| AdapterError::InvalidDeviceSpec)?;
+
+    // Get the device from protocol factory
+    let device = manager.get_network_device(device_id)
         .ok_or(AdapterError::DeviceError(DeviceError::InvalidUrl))?;
 
-    // Get the HTTP client from the device's client field
-    let client = device.client
-        .as_mut()
+    // Downcast to HTTP protocol handler
+    let http_handler = device.as_any_mut()
+        .downcast_mut::<HttpProtocol>()
         .ok_or(AdapterError::DeviceError(DeviceError::InvalidUrl))?;
 
-    // Create runtime and execute POST request
-    let rt = tokio::runtime::Runtime::new().unwrap();
-    rt.block_on(client.post(&request.device_spec, &request.data))
+    // Execute POST request with raw URL
+    rt.block_on(http_handler.post(&url.url, &request.data))
         .map(|_| ())  // Discard the response data
         .map_err(AdapterError::from)?;
 

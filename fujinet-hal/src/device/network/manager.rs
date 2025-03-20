@@ -1,6 +1,7 @@
 use crate::device::manager::{DeviceManager, DeviceState};
 use crate::device::network::NetworkUrl;
 use crate::device::network::protocols::{NetworkProtocol, ProtocolFactory};
+use crate::device::network::network_device::NetworkDevice;
 use crate::device::DeviceError;
 use crate::device::DeviceResult;
 use async_trait::async_trait;
@@ -22,6 +23,9 @@ pub trait NetworkManager {
 
     /// Closes a device by its ID
     async fn close_device(&mut self, device_id: usize) -> DeviceResult<bool>;
+
+    /// Gets a network device by its ID
+    fn get_network_device(&mut self, device_id: usize) -> Option<&mut Box<dyn NetworkDevice>>;
 }
 
 /// Concrete implementation of the NetworkManager trait
@@ -102,5 +106,10 @@ impl NetworkManager for NetworkManagerImpl {
         } else {
             Ok(false)
         }
+    }
+
+    fn get_network_device(&mut self, device_id: usize) -> Option<&mut Box<dyn NetworkDevice>> {
+        // Get the device directly from protocol factory
+        self.protocol_factory.get_device(device_id)
     }
 } 
