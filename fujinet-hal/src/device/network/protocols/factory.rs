@@ -14,16 +14,16 @@ impl ProtocolFactory {
         }
     }
 
+    // Returns device_id if successful
     pub async fn get_or_create_device(
         &mut self, 
         device_id: usize,
         protocol: NetworkProtocol,
         url: &str
-    ) -> DeviceResult<&mut Box<dyn NetworkDevice>> {
+    ) -> DeviceResult<usize> {
         // If we already have an active device
-        if let Some(device) = &mut self.active_devices[device_id] {
-            // For now, assume existing device matches protocol
-            return Ok(device);
+        if self.active_devices[device_id].is_some() {
+            return Ok(device_id);
         }
 
         // Create new device based on protocol
@@ -33,14 +33,13 @@ impl ProtocolFactory {
             }
         };
 
-        // First insert the device
         self.active_devices[device_id] = Some(device);
-        
-        // Then get a mutable reference to it
-        match &mut self.active_devices[device_id] {
-            Some(device) => Ok(device),
-            None => unreachable!("Device was just inserted")
-        }
+        Ok(device_id)
+    }
+
+    // Separate method to get device by ID
+    pub fn get_device(&mut self, device_id: usize) -> Option<&mut Box<dyn NetworkDevice>> {
+        self.active_devices[device_id].as_mut()
     }
 
     pub async fn close_device(&mut self, device_id: usize) -> DeviceResult<()> {
