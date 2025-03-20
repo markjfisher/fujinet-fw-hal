@@ -64,7 +64,7 @@ pub extern "C" fn network_http_post(devicespec: *const c_char, data: *const c_ch
         data,
     };
 
-    // Use global http_post function and map result to FFI error code
+    // Call the global function which handles getting the manager
     adapter_result_to_ffi(global::http_post(request))
 }
 

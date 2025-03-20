@@ -1,7 +1,5 @@
 use crate::device::network::NetworkUrl;
-use crate::device::network::protocols::HttpClient;
 
-// Maximum number of network devices supported
 pub const MAX_NETWORK_DEVICES: usize = 8;
 
 #[derive(Default)]
@@ -9,7 +7,6 @@ pub struct DeviceState {
     pub mode: u8,
     pub trans: u8,
     pub url: Option<NetworkUrl>,
-    pub client: Option<Box<dyn HttpClient>>,
 }
 
 pub struct DeviceManager {
@@ -42,12 +39,14 @@ impl DeviceManager {
         }
     }
 
-    pub fn set_device_client(&mut self, device_id: usize, client: Box<dyn HttpClient>) -> bool {
+    pub fn clear_device_state(&mut self, device_id: usize) -> bool {
         if let Some(device) = self.get_device(device_id) {
-            device.client = Some(client);
+            device.mode = 0;
+            device.trans = 0;
+            device.url = None;
             true
         } else {
             false
         }
     }
-} 
+}
