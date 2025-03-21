@@ -3,6 +3,7 @@ use fujinet_hal::device::{Device, DeviceResult, DeviceStatus};
 use fujinet_hal::device::network::protocols::{ProtocolHandler, ConnectionStatus};
 use fujinet_hal::device::network::protocols::http::HttpProtocol;
 use fujinet_hal::device::network::{NetworkDeviceImpl, new_network_device};
+use fujinet_hal::device::network::url::NetworkUrl;
 use std::sync::{Arc, Mutex};
 
 #[derive(Default)]
@@ -105,7 +106,7 @@ async fn test_network_device_basic_operations() -> DeviceResult<()> {
 #[tokio::test]
 async fn test_network_device_factory() -> DeviceResult<()> {
     // Test valid HTTP URL with default unit
-    let device = new_network_device("N:http://example.com".to_string())?;
+    let device = new_network_device(&NetworkUrl::parse("N:http://example.com")?)?;
     assert_eq!(device.name(), "network");
     assert_eq!(device.get_status().await?, DeviceStatus::Disconnected);
     
@@ -114,7 +115,7 @@ async fn test_network_device_factory() -> DeviceResult<()> {
         .expect("Device should be NetworkDeviceImpl with HttpProtocol");
 
     // Test valid HTTPS URL with specific unit
-    let device = new_network_device("N2:https://example.com".to_string())?;
+    let device = new_network_device(&NetworkUrl::parse("N2:https://example.com")?)?;
     assert_eq!(device.name(), "network");
     assert_eq!(device.get_status().await?, DeviceStatus::Disconnected);
     
@@ -123,15 +124,15 @@ async fn test_network_device_factory() -> DeviceResult<()> {
         .expect("Device should be NetworkDeviceImpl with HttpProtocol");
 
     // Test invalid protocol
-    let result = new_network_device("N:invalid://example.com".to_string());
+    let result = new_network_device(&NetworkUrl::parse("N:invalid://example.com")?);
     assert!(result.is_err());
 
     // Test malformed URL
-    let result = new_network_device("malformed_url".to_string());
+    let result = new_network_device(&NetworkUrl::parse("malformed_url")?);
     assert!(result.is_err());
 
     // Test invalid unit number
-    let result = new_network_device("N9:http://example.com".to_string());
+    let result = new_network_device(&NetworkUrl::parse("N9:http://example.com")?);
     assert!(result.is_err());
 
     Ok(())

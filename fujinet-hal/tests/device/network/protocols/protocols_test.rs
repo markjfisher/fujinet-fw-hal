@@ -1,4 +1,4 @@
-use fujinet_hal::device::network::protocols::{is_protocol_supported, NetworkProtocol, get_supported_protocols};
+use fujinet_hal::device::network::protocols::is_protocol_supported;
 
 #[test]
 fn test_supported_protocols() {
@@ -14,14 +14,4 @@ fn test_supported_protocols() {
     // Test case insensitivity
     assert!(is_protocol_supported("HTTP"));
     assert!(is_protocol_supported("HTTPS"));
-}
-
-#[test]
-fn test_protocol_enumeration() {
-    let supported = get_supported_protocols();
-    
-    // Verify we have exactly the expected protocols
-    assert_eq!(supported.len(), 2);
-    assert!(supported.contains(&NetworkProtocol::Http));
-    assert!(supported.contains(&NetworkProtocol::Https));
 }

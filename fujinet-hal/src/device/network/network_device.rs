@@ -106,15 +106,14 @@ impl<P: ProtocolHandler> Device for NetworkDeviceImpl<P> {
 }
 
 // Factory function to create the right device type based on URL
-pub fn new_network_device(endpoint: String) -> DeviceResult<Box<dyn NetworkDevice>> {
-    let parsed = NetworkUrl::parse(&endpoint)?;
-    let scheme = parsed.scheme()?;
+pub fn new_network_device(url: &NetworkUrl) -> DeviceResult<Box<dyn NetworkDevice>> {
+    let scheme = url.scheme()?;
     
     match scheme {
         "http" | "https" => {
             let protocol = HttpProtocol::default();
             // The protocol will handle the network unit internally
-            let device = NetworkDeviceImpl::new(endpoint, protocol);
+            let device = NetworkDeviceImpl::new(url.url.clone(), protocol);
             Ok(Box::new(device))
         },
         _ => Err(DeviceError::InvalidProtocol),

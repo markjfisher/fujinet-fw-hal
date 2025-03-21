@@ -1,6 +1,6 @@
 pub mod manager;
 pub mod protocols;
-mod url;
+pub mod url;
 mod network_device;
 
 pub use url::NetworkUrl;

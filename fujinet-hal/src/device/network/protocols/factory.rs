@@ -1,5 +1,5 @@
 use super::NetworkProtocol;
-use crate::device::network::{NetworkDevice, new_network_device};
+use crate::device::network::{NetworkDevice, new_network_device, NetworkUrl};
 use crate::device::DeviceResult;
 
 pub struct ProtocolFactory {
@@ -10,7 +10,8 @@ pub struct ProtocolFactory {
 impl ProtocolFactory {
     pub fn new() -> Self {
         Self {
-            active_devices: Default::default()
+            // Explicitly initialize with None
+            active_devices: [None, None, None, None, None, None, None, None]
         }
     }
 
@@ -19,8 +20,10 @@ impl ProtocolFactory {
         &mut self, 
         device_id: usize,
         protocol: NetworkProtocol,
-        url: &str
+        url: &NetworkUrl
     ) -> DeviceResult<usize> {
+        debug_assert!(device_id < self.active_devices.len(), "device_id out of bounds");
+        
         // If we already have an active device
         if self.active_devices[device_id].is_some() {
             return Ok(device_id);
@@ -29,7 +32,7 @@ impl ProtocolFactory {
         // Create new device based on protocol
         let device = match protocol {
             NetworkProtocol::Http => {
-                new_network_device(url.to_string())?
+                new_network_device(url)?
             }
         };
 

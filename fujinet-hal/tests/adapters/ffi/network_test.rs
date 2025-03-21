@@ -26,9 +26,13 @@ fn test_network_open_invalid_url() {
 
 #[test]
 fn test_network_open_valid_urls() {
-    // Test N1: (default unit)
+    // Test N: (implicit unit 1)
     let url1 = CString::new("N:http://example.com").unwrap();
     assert_eq!(network_open(url1.as_ptr(), 4, 0), FN_ERR_OK);
+
+    // Test N1: (explicit unit 1)
+    let url1_explicit = CString::new("N1:http://example.com").unwrap();
+    assert_eq!(network_open(url1_explicit.as_ptr(), 4, 0), FN_ERR_OK);
 
     // Test N2:
     let url2 = CString::new("N2:http://example.com").unwrap();

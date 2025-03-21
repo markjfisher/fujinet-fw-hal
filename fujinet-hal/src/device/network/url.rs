@@ -17,6 +17,7 @@ impl NetworkUrl {
     pub fn parse(url: &str) -> DeviceResult<Self> {
         // Check if URL starts with N: or Nx: where x is 1-8 (case insensitive)
         if let Some(rest) = url.strip_prefix("N:").or_else(|| url.strip_prefix("n:")) {
+            // Default to unit 1 when no number specified
             Ok(Self {
                 unit: 1,
                 url: rest.to_string(),

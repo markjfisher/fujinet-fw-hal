@@ -37,11 +37,11 @@ impl Default for MockHttpClient {
 }
 
 impl MockHttpClient {
-    pub fn new() -> Self {
+    pub fn _new() -> Self {
         Self::default()
     }
 
-    pub fn get_last_post(&self) -> Option<(String, Vec<u8>)> {
+    pub fn _get_last_post(&self) -> Option<(String, Vec<u8>)> {
         let state = self.state.lock().unwrap();
         if state.last_url.is_empty() {
             None

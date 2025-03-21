@@ -1,9 +1,8 @@
 ---
 description: Setting architecture for projects
-globs: *.rs,*.toml,*.c,*.h,*.sh
-alwaysApply: true
+globs: 
+alwaysApply: false
 ---
-
 # FujiNet HAL Architecture Rules
 
 FujiNet is a multi-peripheral emulator and WiFi network device for vintage computers.
@@ -22,7 +21,6 @@ Examples of Fujinet include:
 - an esp32 adapter that plugs into an Apple2 8 bit machine on the drive port using SmartPort protocol.
 - an application running on X86 hardware that communicates over TCP 
 
-
 In order to work as an application, or a library, this project follows Hardware Abstraction Layer principles.
 
 ## Layer Architecture
@@ -31,10 +29,33 @@ In order to work as an application, or a library, this project follows Hardware 
 - Contains platform-agnostic device implementations
 - Defines core traits and interfaces
 - Handles protocol-specific logic
-- Key components:
-  - NetworkUrl: Parses device specifications
-  - BaseHttpClient: Common HTTP functionality
-  - NetworkDevice: Generic network device implementation
+- Key components and responsibilities:
+  - NetworkUrl: 
+    - Parses device specifications (N[x]:protocol://...)
+    - Validates unit numbers and protocols
+    - Maintains URL parsing consistency across layers
+    - Single source of truth for URL parsing and validation
+  - DeviceManager:
+    - Manages device configuration state (mode, trans, URL)
+    - Does NOT manage active network connections
+    - Provides device lookup and state management
+    - Maintains device lifecycle state
+  - ProtocolFactory:
+    - Single source of truth for active network devices
+    - Creates and manages protocol handlers
+    - Maintains protocol handler lifecycle
+    - Maps device IDs to active protocol instances
+    - Owns all protocol handler instances
+  - NetworkDevice:
+    - Base trait for all network devices
+    - Defines common device operations
+    - Implemented by protocol handlers
+    - Provides protocol-agnostic interface
+  - Protocol Handlers:
+    - Implement protocol-specific logic (HTTP, TCP, etc.)
+    - Implement both NetworkDevice and protocol-specific traits
+    - Handle protocol state and operations
+    - Delegate actual network operations to platform layer
 
 ### 2. Platform Layer (src/platform/)
 - Contains platform-specific implementations
@@ -44,73 +65,59 @@ In order to work as an application, or a library, this project follows Hardware 
   - X86HttpClient: Platform-specific HTTP implementation
   - Platform-specific error handling
   - Platform-specific initialization
+  - Network implementation details
 
 ### 3. Adapters Layer (src/adapters/)
-- Provides adapters for different ways of accessing the library:
-  - FFI: Direct C/C++ library integration
-  - SIO: Atari serial interface protocol
-  - SmartPort: Apple II disk protocol
-  - TCP: Network socket based protocol
-  - HTTP: RESTful web service
-- Each adapter implements its own:
+- Provides adapters for different ways of accessing the library
+- Each adapter type is isolated in its own directory
+- Handles protocol-specific client interfaces
+- Key responsibilities:
   - Request/response handling
   - Protocol-specific state management
-  - Error mapping
-  - Resource management
+  - Error mapping to protocol-specific codes
+  - Resource lifecycle management
 
-### 4. FFI Adapter (src/adapters/ffi/)
-- An adapter type when including the project as a library in the client application directly without any communication separation like SIO, serial, SmartPort etc.
-- Provides C/C++ interface bindings
-- Handles C-Rust type conversions
-- Maps internal errors to C error codes
-- Key components:
-  - FFI function declarations
-  - Type conversion utilities
-  - Error code mapping
-  - Memory management utilities
+### Component Relationships
+1. Manager Layer:
+   - NetworkManager coordinates between DeviceManager and ProtocolFactory
+   - DeviceManager handles configuration state
+   - ProtocolFactory handles active network devices
+   - Clear separation between state and active connections
+   - No state duplication between components
 
-### Module Organization Rules
+2. Protocol Layer:
+   - Protocol handlers implement both NetworkDevice and protocol traits
+   - Platform layer provides concrete network implementations
+   - Clear separation between protocol logic and network operations
+   - Protocol handlers delegate to platform implementations
 
-1. `mod.rs` files should only be used to:
-   - Declare submodules
-   - Re-export public items from submodules
-   - Provide module-level documentation
-2. All implementation code should be in appropriately named files
-3. File names should clearly indicate their purpose
-4. Avoid hiding complex logic in `mod.rs` files
-5. Use `mod.rs` for organization, not implementation
+3. State Management:
+   - Device state lives in DeviceManager
+   - Active connections live in ProtocolFactory
+   - URL parsing and validation in NetworkUrl
+   - No duplicate state management between components
+   - Clear ownership boundaries
 
-## Error Handling
+### State Flow and Validation
+1. URL Handling:
+   - All URL parsing goes through NetworkUrl
+   - Device specs always follow N[x]:protocol:// format
+   - URLs stored without N[x]: prefix in device state
+   - Protocol handlers use raw URLs without prefix
+   - Consistent URL validation across layers
 
-### Device Layer Errors
-- DeviceError enum for platform-agnostic errors
-- Protocol-specific error types
-- Connection state errors
+2. Device Lifecycle:
+   - Device creation starts with NetworkManager
+   - State initialized in DeviceManager
+   - Protocol handler created by ProtocolFactory
+   - Clear ownership and state transitions
+   - Explicit cleanup on device closure
 
-### Platform Layer Errors
-- Platform-specific error handling
-- Maps device errors to platform errors
-- Network-specific error conditions
-
-### Adapter Layer Errors
-- Each adapter defines its own error types/codes
-- Maps platform and device errors to protocol-specific errors
-- Handles protocol-specific error states
-- Examples:
-  - FFI: FN_ERR_* C error codes
-  - SIO: Atari error codes
-  - HTTP: Standard HTTP status codes
-
-## Network Protocol Support
-
-### HTTP/HTTPS
-- Base implementation in device layer
-- Platform-specific implementation in platform layer
-
-### Future Protocols
-- Add new protocol support in device layer
-- Implement platform support in platform layer
-- Create new adapter in adapters/ for protocol-specific client interface
+3. Error Handling:
+   - Each layer has its own error types
+   - Errors mapped appropriately between layers
+   - Clear error responsibility per component
+   - Consistent error propagation patterns
 
 ## Development Guidelines
 
@@ -124,73 +131,83 @@ In order to work as an application, or a library, this project follows Hardware 
 8. Use existing URL parsing and protocol handling
 9. Add new protocols by extending existing patterns
 
-## Adapter Development Guidelines
-1. Create new adapters only for concrete use cases
-2. Each adapter should be self-contained in its subdirectory
-3. Implement clear request/response patterns
-4. Handle protocol-specific error mapping
-5. Document protocol specifications and requirements
-6. Provide protocol-specific examples and tests
+10. Component Responsibility Rules:
+    - DeviceManager only manages configuration state
+    - ProtocolFactory is source of truth for active devices
+    - Protocol handlers delegate network ops to platform
+    - NetworkManager coordinates but doesn't duplicate state
+    - Each component has clear, single responsibility
 
-## Testing
+11. State Management Rules:
+    - No duplicate state between components
+    - Clear ownership of each state type
+    - Explicit state transitions
+    - Validate state at boundaries
+    - State access through proper interfaces
 
-### Test Organization
-- Tests organized by layer:
-  - `tests/device/`: Core device implementations
-  - `tests/platform/`: Platform-specific features
-  - `tests/adapters/`: Protocol adapter tests
-    - `ffi/`: C interface tests
-    - `sio/`: Atari protocol tests
-    - `smartport/`: Apple II protocol tests
-    - etc.
+12. URL Handling Rules:
+    - All parsing through NetworkUrl
+    - Consistent prefix handling
+    - Clear URL format requirements
+    - Protocol-specific URL validation
+    - No ad-hoc URL parsing
 
-### Device Layer Tests (`tests/device/`)
-- Unit tests for core functionality
-  - `network_device_test.rs`: Network device implementation tests
-  - `url_test.rs`: URL parsing and validation tests
-  - `protocols/`: Protocol-specific test implementations
-- Test requirements:
-  - Must use async/await for async operations
-  - Must test error conditions and edge cases
-  - Must verify protocol-specific behavior
-  - Must use mock implementations where appropriate
+## Testing Guidelines
 
-### Platform Layer Tests (`tests/platform/`)
-- Platform-specific implementation tests
-  - `x86/`: X86 platform specific tests
-  - `network/`: Network implementation tests
-- Test requirements:
-  - Must test platform-specific features
-  - Must verify integration with device layer
-  - Must test error handling and recovery
-  - Must use platform-specific test utilities
+1. Test Organization:
+   - Tests follow same layer structure as code
+   - Each component has dedicated test suite
+   - Mock implementations for dependencies
+   - Test both success and error paths
 
-### FFI Adapter Layer Tests (`tests/adapters/ffi/`)
-- C interface binding tests
-  - `device_test.rs`: Device FFI tests
-  - `platform_test.rs`: Platform FFI tests
-  - `error_test.rs`: Error code mapping tests
-- Test requirements:
-  - Must verify correct type conversion
-  - Must test error code mapping
-  - Must verify memory safety
-  - Must test null pointer handling
+2. Component Testing:
+   - Test component boundaries
+   - Verify state transitions
+   - Check error conditions
+   - Validate lifecycle management
 
-### C Interface Tests (`tests/c/`)
-- Integration tests for C interface
-  - `fujinet-network_test.c`: Network interface tests
-- Test requirements:
-  - Must verify C interface contracts
-  - Must test error handling
-  - Must verify memory management
-  - Must test all exported functions
+3. Integration Testing:
+   - Test component interactions
+   - Verify state flow
+   - Check error propagation
+   - Test full request/response cycles
 
-### Test Guidelines
-1. Each test file should focus on a single component
-2. Use descriptive test names that indicate the test purpose
-3. Include both positive and negative test cases
-4. Document test requirements and assumptions
-5. Use appropriate test attributes (e.g., #[tokio::test])
-6. Follow the same layer separation as the main code
-7. Maintain test isolation and independence
-8. Use appropriate test fixtures and setup/teardown
+4. URL Testing:
+   - Test all URL formats
+   - Verify prefix handling
+   - Check validation rules
+   - Test error cases
+
+## Error Handling
+
+### Device Layer Errors
+- DeviceError enum for platform-agnostic errors
+- Protocol-specific error types
+- Connection state errors
+- Clear error propagation paths
+
+### Platform Layer Errors
+- Platform-specific error handling
+- Maps device errors to platform errors
+- Network-specific error conditions
+- Consistent error mapping patterns
+
+### Adapter Layer Errors
+- Each adapter defines its own error types/codes
+- Maps platform and device errors to protocol-specific errors
+- Handles protocol-specific error states
+- Clear error responsibility chain
+
+## Network Protocol Support
+
+### HTTP/HTTPS
+- Base implementation in device layer
+- Platform-specific implementation in platform layer
+- Consistent error handling
+- Clear state management
+
+### Future Protocols
+- Follow established patterns
+- Maintain layer separation
+- Implement required traits
+- Handle protocol-specific details

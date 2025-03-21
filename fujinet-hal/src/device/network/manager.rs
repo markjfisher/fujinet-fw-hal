@@ -69,7 +69,7 @@ impl NetworkManager for NetworkManagerImpl {
 
         // Then create/get protocol handler
         let protocol = NetworkProtocol::from_str(url.scheme()?).ok_or(DeviceError::UnsupportedProtocol)?;
-        self.protocol_factory.get_or_create_device(device_id, protocol, &url.url).await?;
+        self.protocol_factory.get_or_create_device(device_id, protocol, &url).await?;
 
         Ok(())
     }

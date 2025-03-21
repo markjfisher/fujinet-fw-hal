@@ -1,0 +1,100 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# FujiNet HAL Architecture Rules
+
+[Previous introduction content remains the same...]
+
+## Layer Architecture
+
+### 1. Device Layer (src/device/)
+- Contains platform-agnostic device implementations
+- Defines core traits and interfaces
+- Handles protocol-specific logic
+- Key components and responsibilities:
+  - NetworkUrl: 
+    - Parses device specifications (N[x]:protocol://...)
+    - Validates unit numbers and protocols
+    - Maintains URL parsing consistency across layers
+  - DeviceManager:
+    - Manages device configuration state (mode, trans, URL)
+    - Does NOT manage active network connections
+    - Provides device lookup and state management
+  - ProtocolFactory:
+    - Single source of truth for active network devices
+    - Creates and manages protocol handlers
+    - Maintains protocol handler lifecycle
+    - Maps device IDs to active protocol instances
+  - NetworkDevice:
+    - Base trait for all network devices
+    - Defines common device operations
+    - Implemented by protocol handlers
+  - Protocol Handlers:
+    - Implement protocol-specific logic (HTTP, TCP, etc.)
+    - Implement both NetworkDevice and protocol-specific traits
+    - Handle protocol state and operations
+    - Delegate actual network operations to platform layer
+
+### Component Relationships
+1. Manager Layer:
+   - NetworkManager coordinates between DeviceManager and ProtocolFactory
+   - DeviceManager handles configuration state
+   - ProtocolFactory handles active network devices
+   - Clear separation between state and active connections
+
+2. Protocol Layer:
+   - Protocol handlers implement both NetworkDevice and protocol traits
+   - Platform layer provides concrete network implementations
+   - Clear separation between protocol logic and network operations
+
+3. State Management:
+   - Device state lives in DeviceManager
+   - Active connections live in ProtocolFactory
+   - URL parsing and validation in NetworkUrl
+   - No duplicate state management between components
+
+### State Flow and Validation
+1. URL Handling:
+   - All URL parsing goes through NetworkUrl
+   - Device specs always follow N[x]:protocol:// format
+   - URLs stored without N[x]: prefix in device state
+   - Protocol handlers use raw URLs without prefix
+
+2. Device Lifecycle:
+   - Device creation starts with NetworkManager
+   - State initialized in DeviceManager
+   - Protocol handler created by ProtocolFactory
+   - Clear ownership and state transitions
+
+3. Error Handling:
+   - Each layer has its own error types
+   - Errors mapped appropriately between layers
+   - Clear error responsibility per component
+
+[Rest of the original content remains...]
+
+## Development Guidelines
+
+[Previous guidelines remain, adding:]
+
+10. Component Responsibility Rules:
+    - DeviceManager only manages configuration state
+    - ProtocolFactory is source of truth for active devices
+    - Protocol handlers delegate network ops to platform
+    - NetworkManager coordinates but doesn't duplicate state
+
+11. State Management Rules:
+    - No duplicate state between components
+    - Clear ownership of each state type
+    - Explicit state transitions
+    - Validate state at boundaries
+
+12. URL Handling Rules:
+    - All parsing through NetworkUrl
+    - Consistent prefix handling
+    - Clear URL format requirements
+    - Protocol-specific URL validation
+
+[Rest of the original content remains...] 
