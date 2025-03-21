@@ -3,6 +3,7 @@ use async_trait::async_trait;
 use crate::device::DeviceResult;
 use crate::device::network::protocols::HttpClient;
 use crate::device::network::protocols::http_client::BaseHttpClient;
+use crate::device::network::protocols::client_provider::HttpClientProvider;
 use reqwest::Client as ReqwestClient;
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 
@@ -247,5 +248,14 @@ impl HttpClient for X86HttpClient {
 
     fn get_network_unit(&self) -> u8 {
         self.base.get_network_unit()
+    }
+}
+
+#[derive(Default)]
+pub struct DefaultHttpClientProvider;
+
+impl HttpClientProvider for DefaultHttpClientProvider {
+    fn create_http_client(&self) -> Box<dyn HttpClient> {
+        Box::new(X86HttpClient::default())
     }
 } 

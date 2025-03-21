@@ -1,11 +1,19 @@
-use fujinet_hal::device::network::NetworkUrl;
-use fujinet_hal::device::network::protocols::HttpClient;
+use fujinet_hal::device::network::protocols::{HttpClient, client_provider::HttpClientProvider};
 use fujinet_hal::device::DeviceResult;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use async_trait::async_trait;
 
-/// Mock HTTP client for testing
+/// Mock HTTP client provider for testing
+#[derive(Default)]
+pub struct MockHttpClientProvider;
+
+impl HttpClientProvider for MockHttpClientProvider {
+    fn create_http_client(&self) -> Box<dyn HttpClient> {
+        Box::new(MockHttpClient::default())
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct MockHttpClient {
     state: Arc<Mutex<MockHttpClientState>>,
@@ -13,41 +21,72 @@ pub struct MockHttpClient {
 
 #[derive(Debug)]
 struct MockHttpClientState {
+    last_method: String,
     last_url: String,
-    last_post_data: Vec<u8>,
+    last_body: Vec<u8>,
     headers: HashMap<String, String>,
     status_code: u16,
-    network_unit: u8,
+    last_request_headers: HashMap<String, String>,
+    response_data: Vec<u8>,
     is_connected: bool,
+    network_unit: u8,
 }
 
 impl Default for MockHttpClient {
     fn default() -> Self {
         Self {
             state: Arc::new(Mutex::new(MockHttpClientState {
+                last_method: String::new(),
                 last_url: String::new(),
-                last_post_data: Vec::new(),
+                last_body: Vec::new(),
                 headers: HashMap::new(),
                 status_code: 200,
-                network_unit: 1,
+                last_request_headers: HashMap::new(),
+                response_data: Vec::new(),
                 is_connected: false,
+                network_unit: 1,
             })),
         }
     }
 }
 
-impl MockHttpClient {
-    pub fn _new() -> Self {
-        Self::default()
-    }
+pub trait MockHttpClientHelpers {
+    fn get_last_request(&self) -> Option<(String, String, Vec<u8>)>;
+    fn get_last_request_headers(&self) -> Option<HashMap<String, String>>;
+    fn set_response_data(&self, data: &[u8]);
+    fn is_connected(&self) -> bool;
+}
 
-    pub fn _get_last_post(&self) -> Option<(String, Vec<u8>)> {
+impl MockHttpClientHelpers for MockHttpClient {
+    fn get_last_request(&self) -> Option<(String, String, Vec<u8>)> {
         let state = self.state.lock().unwrap();
-        if state.last_url.is_empty() {
+        if state.last_method.is_empty() {
             None
         } else {
-            Some((state.last_url.clone(), state.last_post_data.clone()))
+            Some((
+                state.last_method.clone(),
+                state.last_url.clone(),
+                state.last_body.clone(),
+            ))
         }
+    }
+
+    fn get_last_request_headers(&self) -> Option<HashMap<String, String>> {
+        let state = self.state.lock().unwrap();
+        if state.last_request_headers.is_empty() {
+            None
+        } else {
+            Some(state.last_request_headers.clone())
+        }
+    }
+
+    fn set_response_data(&self, data: &[u8]) {
+        let mut state = self.state.lock().unwrap();
+        state.response_data = data.to_vec();
+    }
+
+    fn is_connected(&self) -> bool {
+        self.state.lock().unwrap().is_connected
     }
 }
 
@@ -56,12 +95,8 @@ impl HttpClient for MockHttpClient {
     async fn connect(&mut self, url: &str) -> DeviceResult<()> {
         let mut state = self.state.lock().unwrap();
         state.is_connected = true;
-        // Parse the URL to strip N: prefix if present
-        if let Ok(network_url) = NetworkUrl::parse(url) {
-            state.last_url = network_url.url;
-        } else {
-            state.last_url = url.to_string();
-        }
+        state.last_url = url.to_string();
+        state.last_request_headers = state.headers.clone();
         Ok(())
     }
 
@@ -71,36 +106,57 @@ impl HttpClient for MockHttpClient {
         Ok(())
     }
 
-    async fn get(&mut self, _url: &str) -> DeviceResult<Vec<u8>> {
-        Ok(vec![])
+    async fn get(&mut self, url: &str) -> DeviceResult<Vec<u8>> {
+        let mut state = self.state.lock().unwrap();
+        state.last_method = "GET".to_string();
+        state.last_url = url.to_string();
+        state.last_body.clear();
+        state.last_request_headers = state.headers.clone();
+        Ok(state.response_data.clone())
     }
 
     async fn post(&mut self, url: &str, body: &[u8]) -> DeviceResult<Vec<u8>> {
         let mut state = self.state.lock().unwrap();
-        // Parse the URL to strip N: prefix if present
-        if let Ok(network_url) = NetworkUrl::parse(url) {
-            state.last_url = network_url.url;
-        } else {
-            state.last_url = url.to_string();
-        }
-        state.last_post_data = body.to_vec();
-        Ok(vec![])
+        state.last_method = "POST".to_string();
+        state.last_url = url.to_string();
+        state.last_body = body.to_vec();
+        state.last_request_headers = state.headers.clone();
+        Ok(state.response_data.clone())
     }
 
-    async fn put(&mut self, _url: &str, _body: &[u8]) -> DeviceResult<Vec<u8>> {
-        Ok(vec![])
+    async fn put(&mut self, url: &str, body: &[u8]) -> DeviceResult<Vec<u8>> {
+        let mut state = self.state.lock().unwrap();
+        state.last_method = "PUT".to_string();
+        state.last_url = url.to_string();
+        state.last_body = body.to_vec();
+        state.last_request_headers = state.headers.clone();
+        Ok(state.response_data.clone())
     }
 
-    async fn delete(&mut self, _url: &str) -> DeviceResult<Vec<u8>> {
-        Ok(vec![])
+    async fn delete(&mut self, url: &str) -> DeviceResult<Vec<u8>> {
+        let mut state = self.state.lock().unwrap();
+        state.last_method = "DELETE".to_string();
+        state.last_url = url.to_string();
+        state.last_body.clear();
+        state.last_request_headers = state.headers.clone();
+        Ok(state.response_data.clone())
     }
 
-    async fn head(&mut self, _url: &str) -> DeviceResult<()> {
+    async fn head(&mut self, url: &str) -> DeviceResult<()> {
+        let mut state = self.state.lock().unwrap();
+        state.last_method = "HEAD".to_string();
+        state.last_url = url.to_string();
+        state.last_request_headers = state.headers.clone();
         Ok(())
     }
 
-    async fn patch(&mut self, _url: &str, _body: &[u8]) -> DeviceResult<Vec<u8>> {
-        Ok(vec![])
+    async fn patch(&mut self, url: &str, body: &[u8]) -> DeviceResult<Vec<u8>> {
+        let mut state = self.state.lock().unwrap();
+        state.last_method = "PATCH".to_string();
+        state.last_url = url.to_string();
+        state.last_body = body.to_vec();
+        state.last_request_headers = state.headers.clone();
+        Ok(state.response_data.clone())
     }
 
     fn set_header(&mut self, key: &str, value: &str) {
@@ -109,14 +165,17 @@ impl HttpClient for MockHttpClient {
     }
 
     fn get_status_code(&self) -> u16 {
-        self.state.lock().unwrap().status_code
+        let state = self.state.lock().unwrap();
+        state.status_code
     }
 
     fn get_headers(&self) -> HashMap<String, String> {
-        self.state.lock().unwrap().headers.clone()
+        let state = self.state.lock().unwrap();
+        state.headers.clone()
     }
 
     fn get_network_unit(&self) -> u8 {
-        self.state.lock().unwrap().network_unit
+        let state = self.state.lock().unwrap();
+        state.network_unit
     }
 } 

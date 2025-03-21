@@ -1,6 +1,14 @@
 use std::ffi::CString;
 use fujinet_hal::adapters::ffi::network::{network_init, network_open, network_http_post};
 use fujinet_hal::adapters::ffi::error::{FN_ERR_BAD_CMD, FN_ERR_OK};
+use crate::common::mocks::MockHttpClientProvider;
+
+fn setup_test() {
+    // Set up mock provider for tests
+    let provider = MockHttpClientProvider::default();
+    // TODO: Need a way to set this globally for tests
+    // This is where we need to think about test infrastructure
+}
 
 #[test]
 fn test_network_init() {
@@ -26,6 +34,8 @@ fn test_network_open_invalid_url() {
 
 #[test]
 fn test_network_open_valid_urls() {
+    setup_test();
+
     // Test N: (implicit unit 1)
     let url1 = CString::new("N:http://example.com").unwrap();
     assert_eq!(network_open(url1.as_ptr(), 4, 0), FN_ERR_OK);
@@ -50,7 +60,7 @@ fn test_network_open_valid_urls() {
 #[test]
 fn test_network_open_different_protocols() {
     // Test HTTP
-    let http = CString::new("N1:http://example.com").unwrap();
+    let http = CString::new("N1:http://exampleXYZ.com").unwrap();
     assert_eq!(network_open(http.as_ptr(), 4, 0), FN_ERR_OK);
 
     // Test HTTPS

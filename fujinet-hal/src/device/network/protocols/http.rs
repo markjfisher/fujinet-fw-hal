@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use crate::device::{DeviceError, DeviceResult};
-use super::{ProtocolHandler, ConnectionStatus, HttpClient};
+use super::{ProtocolHandler, ConnectionStatus, HttpClient, client_provider::HttpClientProvider};
 use async_trait::async_trait;
 
 #[async_trait]
@@ -66,8 +66,44 @@ pub struct HttpProtocol {
     response_pos: usize,
 }
 
+impl HttpProtocol {
+    pub fn new(client_provider: &dyn HttpClientProvider) -> Self {
+        let protocol = Self {
+            endpoint: String::new(),
+            status: ConnectionStatus::Disconnected,
+            http_client: Some(client_provider.create_http_client()),
+            response_buffer: Vec::new(),
+            response_pos: 0,
+        };
+        protocol
+    }
+
+    pub fn set_http_client(&mut self, client: Box<dyn HttpClient>) {
+        self.http_client = Some(client);
+    }
+}
+
 impl Default for HttpProtocol {
     fn default() -> Self {
+        // In non-test builds, use platform implementation
+        #[cfg(not(test))]
+        {
+            use crate::platform::x86::network::DefaultHttpClientProvider;
+            Self::new(&DefaultHttpClientProvider::default())
+        }
+        
+        // In test builds, create without client (tests should inject mock)
+        #[cfg(test)]
+        Self::testing_new_without_client()
+    }
+}
+
+// Testing utilities - always available but documented for testing
+impl HttpProtocol {
+    /// Creates a new HttpProtocol instance without a client, for testing purposes.
+    /// This should only be used in tests.
+    #[doc(hidden)]
+    pub fn testing_new_without_client() -> Self {
         Self {
             endpoint: String::new(),
             status: ConnectionStatus::Disconnected,
@@ -87,12 +123,6 @@ impl Clone for HttpProtocol {
             response_buffer: Vec::new(),
             response_pos: 0,
         }
-    }
-}
-
-impl HttpProtocol {
-    pub fn set_http_client(&mut self, client: Box<dyn HttpClient>) {
-        self.http_client = Some(client);
     }
 }
 

@@ -12,4 +12,4 @@ pub use http::HttpProtocol;
 pub use protocol_registry::{NetworkProtocol, is_protocol_supported};
 pub use client_provider::HttpClientProvider;
 pub use factory::ProtocolFactory;
-// pub use https::HttpsProtocol;
+
