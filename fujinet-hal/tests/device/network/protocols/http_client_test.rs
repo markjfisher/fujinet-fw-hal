@@ -11,16 +11,16 @@ fn test_default_state() {
 #[test]
 fn test_parse_network_url_default() {
     let mut client = BaseHttpClient::default();
-    let result = client.parse_network_url("N:http://example.com").unwrap();
-    assert_eq!(result, "http://example.com");
+    let result = client.parse_network_url("N:http://ficticious_example.madeup").unwrap();
+    assert_eq!(result, "http://ficticious_example.madeup");
     assert_eq!(client.get_network_unit(), 1);
 }
 
 #[test]
 fn test_parse_network_url_with_unit() {
     let mut client = BaseHttpClient::default();
-    let result = client.parse_network_url("N3:http://example.com").unwrap();
-    assert_eq!(result, "http://example.com");
+    let result = client.parse_network_url("N3:http://ficticious_example.madeup").unwrap();
+    assert_eq!(result, "http://ficticious_example.madeup");
     assert_eq!(client.get_network_unit(), 3);
 }
 
@@ -28,11 +28,11 @@ fn test_parse_network_url_with_unit() {
 fn test_parse_network_url_invalid_unit() {
     let mut client = BaseHttpClient::default();
     assert!(matches!(
-        client.parse_network_url("N9:http://example.com"),
+        client.parse_network_url("N9:http://ficticious_example.madeup"),
         Err(DeviceError::InvalidProtocol)
     ));
     assert!(matches!(
-        client.parse_network_url("N0:http://example.com"),
+        client.parse_network_url("N0:http://ficticious_example.madeup"),
         Err(DeviceError::InvalidProtocol)
     ));
 }
@@ -41,11 +41,11 @@ fn test_parse_network_url_invalid_unit() {
 fn test_parse_network_url_invalid_format() {
     let mut client = BaseHttpClient::default();
     assert!(matches!(
-        client.parse_network_url("http://example.com"),
+        client.parse_network_url("http://ficticious_example.madeup"),
         Err(DeviceError::InvalidProtocol)
     ));
     assert!(matches!(
-        client.parse_network_url("Nx:http://example.com"),
+        client.parse_network_url("Nx:http://ficticious_example.madeup"),
         Err(DeviceError::InvalidProtocol)
     ));
 }
@@ -74,8 +74,8 @@ fn test_connection_state_management() {
 #[test]
 fn test_url_update() {
     let mut client = BaseHttpClient::default();
-    let url1 = "http://example.com/1".to_string();
-    let url2 = "http://example.com/2".to_string();
+    let url1 = "http://ficticious_example.madeup/1".to_string();
+    let url2 = "http://ficticious_example.madeup/2".to_string();
     
     // Initial URL set
     client.update_url_if_changed(url1.clone());

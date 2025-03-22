@@ -16,6 +16,9 @@ pub trait NetworkDevice: Device + Send + Sync {
     /// Opens a network connection using the specified URL
     /// The URL determines which protocol handler to use
     async fn open_url(&mut self, url: &NetworkUrl) -> DeviceResult<()>;
+
+    /// Gets the protocol handler for this device
+    fn protocol_handler(&mut self) -> &mut dyn ProtocolHandler;
 }
 
 pub struct NetworkDeviceImpl<P: ProtocolHandler + 'static> {
@@ -54,6 +57,10 @@ impl<P: ProtocolHandler> NetworkDevice for NetworkDeviceImpl<P> {
     async fn open_url(&mut self, url: &NetworkUrl) -> DeviceResult<()> {
         self.endpoint = url.url.clone();
         self.protocol.open(&self.endpoint).await
+    }
+
+    fn protocol_handler(&mut self) -> &mut dyn ProtocolHandler {
+        &mut self.protocol
     }
 }
 

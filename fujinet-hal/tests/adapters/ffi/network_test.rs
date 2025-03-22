@@ -37,38 +37,40 @@ fn test_network_open_valid_urls() {
     setup_test();
 
     // Test N: (implicit unit 1)
-    let url1 = CString::new("N:http://example.com").unwrap();
+    let url1 = CString::new("N:http://ficticious_example.madeup").unwrap();
     assert_eq!(network_open(url1.as_ptr(), 4, 0), FN_ERR_OK);
 
     // Test N1: (explicit unit 1)
-    let url1_explicit = CString::new("N1:http://example.com").unwrap();
+    let url1_explicit = CString::new("N1:http://ficticious_example.madeup").unwrap();
     assert_eq!(network_open(url1_explicit.as_ptr(), 4, 0), FN_ERR_OK);
 
     // Test N2:
-    let url2 = CString::new("N2:http://example.com").unwrap();
+    let url2 = CString::new("N2:http://ficticious_example.madeup").unwrap();
     assert_eq!(network_open(url2.as_ptr(), 8, 0), FN_ERR_OK);
 
     // Test N8:
-    let url8 = CString::new("N8:http://example.com").unwrap();
+    let url8 = CString::new("N8:http://ficticious_example.madeup").unwrap();
     assert_eq!(network_open(url8.as_ptr(), 12, 0), FN_ERR_OK);
 
     // Test N9: (invalid unit)
-    let url9 = CString::new("N9:http://example.com").unwrap();
+    let url9 = CString::new("N9:http://ficticious_example.madeup").unwrap();
     assert_eq!(network_open(url9.as_ptr(), 4, 0), FN_ERR_BAD_CMD);
 }
 
 #[test]
 fn test_network_open_different_protocols() {
+    setup_test();
+
     // Test HTTP
-    let http = CString::new("N1:http://exampleXYZ.com").unwrap();
+    let http = CString::new("N1:http://ficticious_example.madeup").unwrap();
     assert_eq!(network_open(http.as_ptr(), 4, 0), FN_ERR_OK);
 
     // Test HTTPS
-    let https = CString::new("N2:https://example.com").unwrap();
+    let https = CString::new("N2:https://_example.com").unwrap();
     assert_eq!(network_open(https.as_ptr(), 4, 0), FN_ERR_OK);
 
     // Test invalid protocol
-    let invalid = CString::new("N3:ftp://example.com").unwrap();
+    let invalid = CString::new("N3:ftp://_example.com").unwrap();
     assert_eq!(network_open(invalid.as_ptr(), 4, 0), FN_ERR_BAD_CMD);
 }
 
@@ -76,9 +78,9 @@ fn test_network_open_different_protocols() {
 fn test_network_open_multiple_devices() {
     // Open multiple devices with different modes
     let urls = [
-        ("N1:http://example.com", 4),  // Read mode
-        ("N2:http://example.com", 8),  // Write mode
-        ("N3:http://example.com", 12), // Read/Write mode
+        ("N1:http://ficticious_example.madeup", 4),  // Read mode
+        ("N2:http://ficticious_example.madeup", 8),  // Write mode
+        ("N3:http://ficticious_example.madeup", 12), // Read/Write mode
     ];
 
     for (url, mode) in urls.iter() {
@@ -94,7 +96,7 @@ fn test_network_http_post_null_pointers() {
     assert_eq!(network_http_post(std::ptr::null(), data.as_ptr()), FN_ERR_BAD_CMD);
 
     // Test null data
-    let devicespec = CString::new("N1:http://example.com").unwrap();
+    let devicespec = CString::new("N1:http://ficticious_example.madeup").unwrap();
     assert_eq!(network_http_post(devicespec.as_ptr(), std::ptr::null()), FN_ERR_BAD_CMD);
 
     // Test both null
@@ -103,7 +105,7 @@ fn test_network_http_post_null_pointers() {
 
 #[test]
 fn test_network_http_post_invalid_utf8() {
-    let devicespec = CString::new("N1:http://example.com").unwrap();
+    let devicespec = CString::new("N1:http://ficticious_example.madeup").unwrap();
     let invalid = unsafe { CString::from_vec_unchecked([0xFF, 0xFE, 0x00].to_vec()) };
     
     // Test invalid UTF-8 in data
@@ -117,7 +119,7 @@ fn test_network_http_post_invalid_utf8() {
 #[test]
 fn test_network_http_post_success() {
     // First open a device
-    let devicespec = CString::new("N1:http://example.com").unwrap();
+    let devicespec = CString::new("N1:http://ficticious_example.madeup").unwrap();
     assert_eq!(network_open(devicespec.as_ptr(), 4, 0), FN_ERR_OK);
 
     // Then post to it

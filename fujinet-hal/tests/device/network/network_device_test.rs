@@ -31,6 +31,14 @@ impl TestProtocol {
 // A mock implementation of the ProtocolHandler trait that we can use to test the NetworkDeviceImpl
 #[async_trait]
 impl ProtocolHandler for TestProtocol {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+
     async fn open(&mut self, endpoint: &str) -> DeviceResult<()> {
         *self.endpoint.lock().unwrap() = Some(endpoint.to_string());
         *self.status.lock().unwrap() = ConnectionStatus::Connected;
@@ -106,7 +114,7 @@ async fn test_network_device_basic_operations() -> DeviceResult<()> {
 #[tokio::test]
 async fn test_network_device_factory() -> DeviceResult<()> {
     // Test valid HTTP URL with default unit
-    let device = new_network_device(&NetworkUrl::parse("N:http://example.com")?)?;
+    let device = new_network_device(&NetworkUrl::parse("N:http://ficticious_example.madeup")?)?;
     assert_eq!(device.name(), "network");
     assert_eq!(device.get_status().await?, DeviceStatus::Disconnected);
     
@@ -132,7 +140,7 @@ async fn test_network_device_factory() -> DeviceResult<()> {
     assert!(result.is_err());
 
     // Test invalid unit number
-    let result = new_network_device(&NetworkUrl::parse("N9:http://example.com")?);
+    let result = new_network_device(&NetworkUrl::parse("N9:http://ficticious_example.madeup")?);
     assert!(result.is_err());
 
     Ok(())

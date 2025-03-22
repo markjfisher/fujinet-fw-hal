@@ -246,7 +246,7 @@
 // fn test_open_device_success() {
 //     let mut mock = MockNetworkManager::new();
 //     let request = DeviceOpenRequest {
-//         device_spec: "N1:http://example.com".to_string(),
+//         device_spec: "N1:http://ficticious_example.madeup".to_string(),
 //         mode: 4,
 //         translation: 0,
 //     };
@@ -290,7 +290,7 @@
 //     let mut mock = MockNetworkManager::new();
     
 //     // First open a device
-//     let _ = mock.open_device("N1:http://example.com", 4, 0);
+//     let _ = mock.open_device("N1:http://ficticious_example.madeup", 4, 0);
     
 //     let result = fujinet_hal::adapters::common::network::operations::close_device(
 //         &mut mock,
@@ -310,7 +310,7 @@
 // fn test_open_device_fails() {
 //     let mut mock = MockNetworkManager::new().with_open_error();
 //     let request = DeviceOpenRequest {
-//         device_spec: "N1:http://example.com".to_string(),
+//         device_spec: "N1:http://ficticious_example.madeup".to_string(),
 //         mode: 4,
 //         translation: 0,
 //     };
@@ -328,7 +328,7 @@
 // fn test_http_post_find_error() {
 //     let mut mock = MockNetworkManager::new().with_find_error();
 //     let request = HttpPostRequest {
-//         device_spec: "N1:http://example.com".to_string(),
+//         device_spec: "N1:http://ficticious_example.madeup".to_string(),
 //         data: vec![1, 2, 3],
 //     };
 
@@ -359,7 +359,7 @@
 // fn test_http_post_device_not_found() {
 //     let mut mock = MockNetworkManager::new();
 //     let request = HttpPostRequest {
-//         device_spec: "N1:http://example.com".to_string(),
+//         device_spec: "N1:http://ficticious_example.madeup".to_string(),
 //         data: vec![1, 2, 3],
 //     };
 
@@ -377,7 +377,7 @@
 //     let mut mock = MockNetworkManager::new();
     
 //     // First open a device
-//     let _ = mock.open_device("N1:http://example.com", 4, 0);
+//     let _ = mock.open_device("N1:http://ficticious_example.madeup", 4, 0);
     
 //     // Add HTTP client to the device
 //     let device = mock.get_device(0).unwrap();
@@ -386,7 +386,7 @@
     
 //     let test_data = vec![1, 2, 3, 4, 5];
 //     let request = HttpPostRequest {
-//         device_spec: "N1:http://example.com".to_string(),
+//         device_spec: "N1:http://ficticious_example.madeup".to_string(),
 //         data: test_data.clone(),
 //     };
 
@@ -400,7 +400,7 @@
 //     // Verify the POST data was passed to the client
 //     if let Some((url, data)) = http_client.get_last_post() {
 //         assert_eq!(data, test_data);
-//         assert_eq!(url, "http://example.com");
+//         assert_eq!(url, "http://ficticious_example.madeup");
 //     } else {
 //         panic!("No POST request was recorded");
 //     }
@@ -412,7 +412,7 @@
     
 //     // First open device N1
 //     let request1 = DeviceOpenRequest {
-//         device_spec: "N1:http://example.com".to_string(),
+//         device_spec: "N1:http://ficticious_example.madeup".to_string(),
 //         mode: 4,
 //         translation: 0,
 //     };
@@ -456,7 +456,7 @@
     
 //     // Test opening device with max valid ID (N8)
 //     let request = DeviceOpenRequest {
-//         device_spec: "N8:http://example.com".to_string(),
+//         device_spec: "N8:http://ficticious_example.madeup".to_string(),
 //         mode: 4,
 //         translation: 0,
 //     };
@@ -469,7 +469,7 @@
     
 //     // Test opening device with invalid ID (N9)
 //     let request = DeviceOpenRequest {
-//         device_spec: "N9:http://example.com".to_string(),
+//         device_spec: "N9:http://ficticious_example.madeup".to_string(),
 //         mode: 4,
 //         translation: 0,
 //     };
@@ -487,7 +487,7 @@
     
 //     // Try to POST without opening the device first
 //     let request = HttpPostRequest {
-//         device_spec: "N1:http://example.com".to_string(),
+//         device_spec: "N1:http://ficticious_example.madeup".to_string(),
 //         data: vec![1, 2, 3],
 //     };
 
@@ -505,10 +505,10 @@
 //     let mut mock = MockNetworkManager::new();
     
 //     // Open device but don't attach HTTP client
-//     let _ = mock.open_device("N1:http://example.com", 4, 0);
+//     let _ = mock.open_device("N1:http://ficticious_example.madeup", 4, 0);
     
 //     let request = HttpPostRequest {
-//         device_spec: "N1:http://example.com".to_string(),
+//         device_spec: "N1:http://ficticious_example.madeup".to_string(),
 //         data: vec![1, 2, 3],
 //     };
 
@@ -526,7 +526,7 @@
 //     let mut mock = MockNetworkManager::new();
     
 //     // First open a device
-//     let _ = mock.open_device("N1:http://example.com", 4, 0);
+//     let _ = mock.open_device("N1:http://ficticious_example.madeup", 4, 0);
     
 //     // Add HTTP client to the device
 //     let device = mock.get_device(0).unwrap();
@@ -534,7 +534,7 @@
 //     device.client = Some(Box::new(http_client.clone()));
     
 //     let request = HttpPostRequest {
-//         device_spec: "N1:http://example.com".to_string(),
+//         device_spec: "N1:http://ficticious_example.madeup".to_string(),
 //         data: vec![],  // Empty data
 //     };
 
@@ -548,7 +548,7 @@
 //     // Verify empty POST was made
 //     if let Some((url, data)) = http_client.get_last_post() {
 //         assert!(data.is_empty());
-//         assert_eq!(url, "http://example.com");
+//         assert_eq!(url, "http://ficticious_example.madeup");
 //     } else {
 //         panic!("No POST request was recorded");
 //     }
@@ -559,7 +559,7 @@
 //     let mut mock = MockNetworkManager::new();
     
 //     // First open a device
-//     let _ = mock.open_device("N1:http://example.com", 4, 0);
+//     let _ = mock.open_device("N1:http://ficticious_example.madeup", 4, 0);
     
 //     // Add HTTP client to the device
 //     let device = mock.get_device(0).unwrap();
@@ -569,7 +569,7 @@
 //     // Create large test data (64KB)
 //     let test_data = vec![0xAA; 65536];
 //     let request = HttpPostRequest {
-//         device_spec: "N1:http://example.com".to_string(),
+//         device_spec: "N1:http://ficticious_example.madeup".to_string(),
 //         data: test_data.clone(),
 //     };
 
@@ -584,7 +584,7 @@
 //     if let Some((url, data)) = http_client.get_last_post() {
 //         assert_eq!(data.len(), 65536);
 //         assert_eq!(data, test_data);
-//         assert_eq!(url, "http://example.com");
+//         assert_eq!(url, "http://ficticious_example.madeup");
 //     } else {
 //         panic!("No POST request was recorded");
 //     }

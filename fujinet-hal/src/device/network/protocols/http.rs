@@ -78,6 +78,16 @@ impl HttpProtocol {
         protocol
     }
 
+    pub fn new_without_client() -> Self {
+        Self {
+            endpoint: String::new(),
+            status: ConnectionStatus::Disconnected,
+            http_client: None,
+            response_buffer: Vec::new(),
+            response_pos: 0,
+        }
+    }
+
     pub fn set_http_client(&mut self, client: Box<dyn HttpClient>) {
         self.http_client = Some(client);
     }
@@ -94,23 +104,7 @@ impl Default for HttpProtocol {
         
         // In test builds, create without client (tests should inject mock)
         #[cfg(test)]
-        Self::testing_new_without_client()
-    }
-}
-
-// Testing utilities - always available but documented for testing
-impl HttpProtocol {
-    /// Creates a new HttpProtocol instance without a client, for testing purposes.
-    /// This should only be used in tests.
-    #[doc(hidden)]
-    pub fn testing_new_without_client() -> Self {
-        Self {
-            endpoint: String::new(),
-            status: ConnectionStatus::Disconnected,
-            http_client: None,
-            response_buffer: Vec::new(),
-            response_pos: 0,
-        }
+        Self::new_without_client()
     }
 }
 
@@ -173,6 +167,14 @@ impl HttpProtocolHandler for HttpProtocol {
 
 #[async_trait]
 impl ProtocolHandler for HttpProtocol {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+
     async fn open(&mut self, endpoint: &str) -> DeviceResult<()> {
         self.endpoint = endpoint.to_string();
         self.status = ConnectionStatus::Connecting;

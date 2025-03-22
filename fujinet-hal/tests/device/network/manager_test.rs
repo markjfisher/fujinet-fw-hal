@@ -16,22 +16,22 @@
 //     let manager = NetworkManagerImpl::new(Box::new(MockHttpClientProvider));
     
 //     // Test default unit (N:)
-//     let result = manager.parse_device_spec("N:http://example.com");
+//     let result = manager.parse_device_spec("N:http://ficticious_example.madeup");
 //     assert!(result.is_ok());
 //     let (device_id, url) = result.unwrap();
 //     assert_eq!(device_id, 0);
 //     assert_eq!(url.unit, 1);
-//     assert_eq!(url.url, "http://example.com");
+//     assert_eq!(url.url, "http://ficticious_example.madeup");
     
 //     // Test specific units
 //     for i in 1..=8 {
-//         let spec = format!("N{}:http://example.com", i);
+//         let spec = format!("N{}:http://ficticious_example.madeup", i);
 //         let result = manager.parse_device_spec(&spec);
 //         assert!(result.is_ok());
 //         let (device_id, url) = result.unwrap();
 //         assert_eq!(device_id, i-1);
 //         assert_eq!(url.unit, i as u8);
-//         assert_eq!(url.url, "http://example.com");
+//         assert_eq!(url.url, "http://ficticious_example.madeup");
 //     }
 // }
 
@@ -55,11 +55,11 @@
 //     }
     
 //     // Test invalid unit number
-//     let result = manager.parse_device_spec("N9:http://example.com");
+//     let result = manager.parse_device_spec("N9:http://ficticious_example.madeup");
 //     assert!(result.is_err());
     
 //     // Test invalid unit number (0)
-//     let result = manager.parse_device_spec("N0:http://example.com");
+//     let result = manager.parse_device_spec("N0:http://ficticious_example.madeup");
 //     assert!(result.is_err());
 // }
 
@@ -68,7 +68,7 @@
 //     let mut manager = NetworkManagerImpl::new(Box::new(MockHttpClientProvider));
     
 //     // Open a device
-//     let result = manager.open_device("N1:http://example.com", 4, 0);
+//     let result = manager.open_device("N1:http://ficticious_example.madeup", 4, 0);
 //     assert!(result.is_ok());
     
 //     // Verify device is open by fetching it
@@ -82,7 +82,7 @@
 //     assert!(device_ref.url.is_some());
     
 //     // check the url is correct
-//     assert_eq!(device_ref.url.as_ref().unwrap().url, "http://example.com");
+//     assert_eq!(device_ref.url.as_ref().unwrap().url, "http://ficticious_example.madeup");
     
 //     // Close the device
 //     let closed = manager.close_device(0);
@@ -100,7 +100,7 @@
 //     let mut manager = NetworkManagerImpl::new(Box::new(MockHttpClientProvider));
     
 //     // Try to find a device that hasn't been opened yet
-//     let spec = "N1:http://example.com";
+//     let spec = "N1:http://ficticious_example.madeup";
 //     let find_result = manager.find_device(spec);
     
 //     // Should be Ok(None) - valid spec but no device

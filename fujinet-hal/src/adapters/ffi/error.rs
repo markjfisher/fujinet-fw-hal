@@ -35,6 +35,7 @@ pub fn adapter_error_to_ffi(error: AdapterError) -> u8 {
             // Map specific device errors to appropriate FFI codes
             crate::device::DeviceError::InvalidUrl => FN_ERR_NO_DEVICE,
             crate::device::DeviceError::InvalidDeviceId => FN_ERR_NO_DEVICE,
+            crate::device::DeviceError::UnsupportedProtocol => FN_ERR_BAD_CMD,
             _ => FN_ERR_IO_ERROR,
         },
     }

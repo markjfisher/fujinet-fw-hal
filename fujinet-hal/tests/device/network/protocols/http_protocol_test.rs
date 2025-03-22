@@ -9,11 +9,11 @@ use crate::common::mocks::{MockHttpClient, MockHttpClientHelpers};
 #[tokio::test]
 async fn test_http_protocol_default_and_clone() {
     // Test default
-    let protocol = HttpProtocol::testing_new_without_client();
+    let protocol = HttpProtocol::new_without_client();
     assert_eq!(protocol.status().await.unwrap(), ConnectionStatus::Disconnected);
     
     // Test clone
-    let mut protocol = HttpProtocol::testing_new_without_client();
+    let mut protocol = HttpProtocol::new_without_client();
     protocol.set_http_client(Box::new(MockHttpClient::default()));
     let mut cloned = protocol.clone();
     
@@ -24,7 +24,7 @@ async fn test_http_protocol_default_and_clone() {
 
 #[tokio::test]
 async fn test_http_protocol_convenience_methods() -> DeviceResult<()> {
-    let mut protocol = HttpProtocol::testing_new_without_client();
+    let mut protocol = HttpProtocol::new_without_client();
     let test_client = MockHttpClient::default();
     protocol.set_http_client(Box::new(test_client.clone()));
 
@@ -78,7 +78,7 @@ async fn test_http_protocol_convenience_methods() -> DeviceResult<()> {
 
 #[tokio::test]
 async fn test_http_protocol_error_scenarios() {
-    let mut protocol = HttpProtocol::testing_new_without_client();
+    let mut protocol = HttpProtocol::new_without_client();
     
     // Test operations without client
     assert!(matches!(protocol.open("test").await, Err(DeviceError::NotReady)));
@@ -100,12 +100,12 @@ async fn test_http_protocol_error_scenarios() {
 
 #[tokio::test]
 async fn test_http_protocol_headers() {
-    let mut protocol = HttpProtocol::testing_new_without_client();
+    let mut protocol = HttpProtocol::new_without_client();
     let test_client = MockHttpClient::default();
     protocol.set_http_client(Box::new(test_client.clone()));
     
     // Connect first to ensure we have a connection state
-    protocol.open("N1:http://example.com").await.unwrap();
+    protocol.open("N1:http://ficticious_example.madeup").await.unwrap();
     
     // Add headers and verify they're stored
     protocol.add_header("Content-Type", "application/json").await.unwrap();
@@ -115,7 +115,7 @@ async fn test_http_protocol_headers() {
     assert_eq!(headers.get("Authorization").unwrap(), "Bearer token");
 
     // Make a request and verify headers were sent
-    protocol.get("http://example.com").await.unwrap();
+    protocol.get("http://ficticious_example.madeup").await.unwrap();
     let request_headers = test_client.get_last_request_headers().unwrap();
     assert_eq!(request_headers.get("Content-Type").unwrap(), "application/json");
     assert_eq!(request_headers.get("Authorization").unwrap(), "Bearer token");
@@ -123,7 +123,7 @@ async fn test_http_protocol_headers() {
 
 #[tokio::test]
 async fn test_http_protocol_connection_state() {
-    let mut protocol = HttpProtocol::testing_new_without_client();
+    let mut protocol = HttpProtocol::new_without_client();
     let test_client = MockHttpClient::default();
     protocol.set_http_client(Box::new(test_client.clone()));
     
@@ -131,7 +131,7 @@ async fn test_http_protocol_connection_state() {
     assert!(!test_client.is_connected());
     
     // Connect and verify state
-    protocol.open("N1:http://example.com").await.unwrap();
+    protocol.open("N1:http://ficticious_example.madeup").await.unwrap();
     assert!(test_client.is_connected());
     
     // Disconnect and verify state
@@ -141,7 +141,7 @@ async fn test_http_protocol_connection_state() {
 
 #[tokio::test]
 async fn test_http_protocol_response_buffer() -> DeviceResult<()> {
-    let mut protocol = HttpProtocol::testing_new_without_client();
+    let mut protocol = HttpProtocol::new_without_client();
     let test_client = MockHttpClient::default();
     protocol.set_http_client(Box::new(test_client.clone()));
 
@@ -183,7 +183,7 @@ async fn test_http_protocol_response_buffer() -> DeviceResult<()> {
 
 #[tokio::test]
 async fn test_http_protocol_handler_implementation() -> DeviceResult<()> {
-    let mut protocol = HttpProtocol::testing_new_without_client();
+    let mut protocol = HttpProtocol::new_without_client();
     let test_client = MockHttpClient::default();
     protocol.set_http_client(Box::new(test_client.clone()));
 

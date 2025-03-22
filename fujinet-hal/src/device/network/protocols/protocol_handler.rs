@@ -2,7 +2,13 @@ use crate::device::{DeviceError, DeviceResult};
 use async_trait::async_trait;
 
 #[async_trait]
-pub trait ProtocolHandler: Send + Sync + Default {
+pub trait ProtocolHandler: Send + Sync + std::any::Any {
+    /// Convert to Any for downcasting
+    fn as_any(&self) -> &dyn std::any::Any;
+    
+    /// Convert to Any for mutable downcasting
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any;
+
     /// Open a connection to the endpoint
     async fn open(&mut self, endpoint: &str) -> DeviceResult<()>;
     

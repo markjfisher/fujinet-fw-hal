@@ -8,7 +8,7 @@ use crate::device::network::protocols::http::{HttpProtocol, HttpProtocolHandler}
 /// Common request structure for opening a network device
 #[derive(Debug)]
 pub struct DeviceOpenRequest {
-    /// The device specification string (e.g. "N1:http://example.com")
+    /// The device specification string (e.g. "N1:http://ficticious_example.madeup")
     pub device_spec: String,
     /// The mode for opening the device
     pub mode: u8,
@@ -19,7 +19,7 @@ pub struct DeviceOpenRequest {
 /// Common request structure for HTTP POST operations
 #[derive(Debug)]
 pub struct HttpPostRequest {
-    /// The device specification string (e.g. "N1:http://example.com")
+    /// The device specification string (e.g. "N1:http://ficticious_example.madeup")
     pub device_spec: String,
     /// The data to POST
     pub data: Vec<u8>,
@@ -98,13 +98,14 @@ pub fn http_post(
     let device = manager.get_network_device(device_id)
         .ok_or(AdapterError::DeviceError(DeviceError::InvalidUrl))?;
 
-    // Downcast to HTTP protocol handler
-    let http_handler = device.as_any_mut()
+    // Get the protocol handler and downcast it to HTTP
+    let protocol = device.protocol_handler();
+    let http_protocol = protocol.as_any_mut()
         .downcast_mut::<HttpProtocol>()
         .ok_or(AdapterError::DeviceError(DeviceError::InvalidUrl))?;
 
     // Execute POST request with raw URL
-    rt.block_on(http_handler.post(&url.url, &request.data))
+    rt.block_on(http_protocol.post(&url.url, &request.data))
         .map(|_| ())  // Discard the response data
         .map_err(AdapterError::from)?;
 

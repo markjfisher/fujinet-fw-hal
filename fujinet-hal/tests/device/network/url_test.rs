@@ -4,27 +4,27 @@ use fujinet_hal::device::DeviceError;
 #[test]
 fn test_network_url_parse_default_unit() {
     // Test uppercase N:
-    let url = NetworkUrl::parse("N:http://example.com").unwrap();
+    let url = NetworkUrl::parse("N:http://ficticious_example.madeup").unwrap();
     assert_eq!(url.unit, 1);
-    assert_eq!(url.url, "http://example.com");
+    assert_eq!(url.url, "http://ficticious_example.madeup");
 
     // Test lowercase n:
-    let url = NetworkUrl::parse("n:http://example.com").unwrap();
+    let url = NetworkUrl::parse("n:http://ficticious_example.madeup").unwrap();
     assert_eq!(url.unit, 1);
-    assert_eq!(url.url, "http://example.com");
+    assert_eq!(url.url, "http://ficticious_example.madeup");
 }
 
 #[test]
 fn test_network_url_parse_specific_unit() {
     // Test uppercase N with unit
-    let url = NetworkUrl::parse("N2:http://example.com").unwrap();
+    let url = NetworkUrl::parse("N2:http://ficticious_example.madeup").unwrap();
     assert_eq!(url.unit, 2);
-    assert_eq!(url.url, "http://example.com");
+    assert_eq!(url.url, "http://ficticious_example.madeup");
 
     // Test lowercase n with unit
-    let url = NetworkUrl::parse("n3:http://example.com").unwrap();
+    let url = NetworkUrl::parse("n3:http://ficticious_example.madeup").unwrap();
     assert_eq!(url.unit, 3);
-    assert_eq!(url.url, "http://example.com");
+    assert_eq!(url.url, "http://ficticious_example.madeup");
 
     // Test all valid unit numbers
     for unit in 1..=8 {
@@ -39,37 +39,37 @@ fn test_network_url_parse_specific_unit() {
 fn test_network_url_parse_invalid_cases() {
     // Test missing network indicator
     assert!(matches!(
-        NetworkUrl::parse("http://example.com"),
+        NetworkUrl::parse("http://ficticious_example.madeup"),
         Err(DeviceError::InvalidProtocol)
     ));
 
     // Test invalid unit number (0)
     assert!(matches!(
-        NetworkUrl::parse("N0:http://example.com"),
+        NetworkUrl::parse("N0:http://ficticious_example.madeup"),
         Err(DeviceError::InvalidProtocol)
     ));
 
     // Test invalid unit number (9)
     assert!(matches!(
-        NetworkUrl::parse("N9:http://example.com"),
+        NetworkUrl::parse("N9:http://ficticious_example.madeup"),
         Err(DeviceError::InvalidProtocol)
     ));
 
     // Test invalid unit number (lowercase)
     assert!(matches!(
-        NetworkUrl::parse("n0:http://example.com"),
+        NetworkUrl::parse("n0:http://ficticious_example.madeup"),
         Err(DeviceError::InvalidProtocol)
     ));
 
     // Test malformed network indicator
     assert!(matches!(
-        NetworkUrl::parse("Nx:http://example.com"),
+        NetworkUrl::parse("Nx:http://ficticious_example.madeup"),
         Err(DeviceError::InvalidProtocol)
     ));
 
     // Test missing colon
     assert!(matches!(
-        NetworkUrl::parse("N1http://example.com"),
+        NetworkUrl::parse("N1http://ficticious_example.madeup"),
         Err(DeviceError::InvalidProtocol)
     ));
 }
@@ -77,7 +77,7 @@ fn test_network_url_parse_invalid_cases() {
 #[test]
 fn test_network_url_scheme() {
     // Test HTTP
-    let url = NetworkUrl::parse("N:http://example.com").unwrap();
+    let url = NetworkUrl::parse("N:http://ficticious_example.madeup").unwrap();
     assert_eq!(url.scheme().unwrap(), "http");
 
     // Test HTTPS
