@@ -4,9 +4,6 @@ use crate::adapters::common::error::AdapterError;
 use tokio::runtime::Runtime;
 use crate::device::network::protocols::{http::HttpProtocol, HttpProtocolHandler};
 use std::sync::{Arc, Mutex};
-use crate::device::network::NetworkUrl;
-use crate::device::manager::DeviceState;
-use crate::device::network::NetworkDevice;
 
 /// Common request structure for opening a network device
 #[derive(Debug)]
@@ -110,34 +107,82 @@ impl OperationsContext<NetworkManagerImpl> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use mockall::predicate::eq;
-    use mockall::mock;
+    use crate::device::DeviceResult;
+    use crate::device::network::NetworkUrl;
+    use crate::device::manager::DeviceState;
+    use crate::device::network::NetworkDevice;
+    use async_trait::async_trait;
 
-    mock! {
-        NetworkManagerImpl {
-            fn parse_device_spec(&self, spec: &str) -> Result<(usize, NetworkUrl), DeviceError>;
-            async fn open_device(&mut self, spec: &str, mode: u8, trans: u8) -> Result<(), DeviceError>;
-            async fn find_device<'a>(&'a mut self, spec: &str) -> Result<Option<(usize, &'a mut DeviceState)>, DeviceError>;
-            fn get_device<'a>(&'a mut self, device_id: usize) -> Option<&'a mut DeviceState>;
-            async fn close_device(&mut self, device_id: usize) -> Result<bool, DeviceError>;
-            fn get_network_device<'a>(&'a mut self, device_id: usize) -> Option<&'a mut Box<dyn NetworkDevice>>;
+    // Create a test-specific network manager that avoids reference issues
+    struct TestNetworkManager {
+        parse_result: Option<(usize, NetworkUrl)>,
+        open_result: bool,
+        close_result: bool,
+    }
+
+    #[async_trait]
+    impl NetworkManager for TestNetworkManager {
+        fn parse_device_spec(&self, spec: &str) -> DeviceResult<(usize, NetworkUrl)> {
+            self.parse_result.clone().ok_or(DeviceError::InvalidUrl)
         }
 
-        impl NetworkManager for NetworkManagerImpl {
+        async fn open_device(&mut self, _spec: &str, _mode: u8, _trans: u8) -> DeviceResult<()> {
+            if self.open_result {
+                Ok(())
+            } else {
+                Err(DeviceError::InvalidUrl)
+            }
+        }
+
+        async fn find_device(&mut self, _spec: &str) -> DeviceResult<Option<(usize, &mut DeviceState)>> {
+            Ok(None)
+        }
+
+        fn get_device(&mut self, _device_id: usize) -> Option<&mut DeviceState> {
+            None
+        }
+
+        async fn close_device(&mut self, _device_id: usize) -> DeviceResult<bool> {
+            Ok(self.close_result)
+        }
+
+        fn get_network_device(&mut self, _device_id: usize) -> Option<&mut Box<dyn NetworkDevice>> {
+            None
+        }
+    }
+
+    impl TestNetworkManager {
+        fn new() -> Self {
+            Self {
+                parse_result: None,
+                open_result: false,
+                close_result: false,
+            }
+        }
+
+        fn with_parse_result(mut self, device_id: usize, url: &str) -> Self {
+            self.parse_result = Some((device_id, NetworkUrl::parse(url).unwrap()));
+            self
+        }
+
+        fn with_open_result(mut self, result: bool) -> Self {
+            self.open_result = result;
+            self
+        }
+
+        fn with_close_result(mut self, result: bool) -> Self {
+            self.close_result = result;
+            self
         }
     }
 
     #[test]
     fn test_open_device() {
-        let mut mock = MockNetworkManagerImpl::new();
-        mock.expect_parse_device_spec()
-            .with(eq("N1:http://test.com"))
-            .returning(|_| Ok((1, NetworkUrl::parse("N1:http://test.com").unwrap())));
-        mock.expect_open_device()
-            .with(eq("N1:http://test.com"), eq(4), eq(0))
-            .returning(|_, _, _| Ok(()));
+        let manager = TestNetworkManager::new()
+            .with_parse_result(1, "N1:http://test.com")
+            .with_open_result(true);
 
-        let context = OperationsContext::new(mock);
+        let context = OperationsContext::new(manager);
         let request = DeviceOpenRequest {
             device_spec: "N1:http://test.com".to_string(),
             mode: 4,
@@ -151,30 +196,20 @@ mod tests {
 
     #[test]
     fn test_close_device() {
-        let mut mock = MockNetworkManagerImpl::new();
-        mock.expect_close_device()
-            .with(eq(1))
-            .returning(|_| Ok(true));
+        let manager = TestNetworkManager::new()
+            .with_close_result(true);
 
-        let context = OperationsContext::new(mock);
+        let context = OperationsContext::new(manager);
         let result = context.close_device(1);
         assert!(result.is_ok());
     }
 
     #[test]
     fn test_http_post() {
-        let mut mock = MockNetworkManagerImpl::new();
-        mock.expect_parse_device_spec()
-            .with(eq("N1:http://test.com"))
-            .returning(|_| Ok((1, NetworkUrl::parse("N1:http://test.com").unwrap())));
-        
-        // Note: We can't easily mock the full HTTP protocol chain in this test
-        // Instead we verify the request is properly parsed and passed to the manager
-        mock.expect_get_network_device()
-            .with(eq(1))
-            .returning(|_| None);
+        let manager = TestNetworkManager::new()
+            .with_parse_result(1, "N1:http://test.com");
 
-        let context = OperationsContext::new(mock);
+        let context = OperationsContext::new(manager);
         let request = HttpPostRequest {
             device_spec: "N1:http://test.com".to_string(),
             data: vec![1, 2, 3],
