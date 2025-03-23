@@ -80,4 +80,74 @@ pub trait HttpClient: Send + Sync {
     fn get_status_code(&self) -> u16;
     fn get_headers(&self) -> HashMap<String, String>;
     fn get_network_unit(&self) -> u8;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_default_state() {
+        let client = BaseHttpClient::default();
+        assert_eq!(client.get_network_unit(), 1);
+        assert!(client.get_current_state().is_none());
+    }
+
+    #[test]
+    fn test_parse_network_url_default() {
+        let mut client = BaseHttpClient::default();
+        let result = client.parse_network_url("N:http://ficticious_example.madeup").unwrap();
+        assert_eq!(result, "http://ficticious_example.madeup");
+        assert_eq!(client.get_network_unit(), 1);
+    }
+
+    #[test]
+    fn test_parse_network_url_with_unit() {
+        let mut client = BaseHttpClient::default();
+        let result = client.parse_network_url("N3:http://ficticious_example.madeup").unwrap();
+        assert_eq!(result, "http://ficticious_example.madeup");
+        assert_eq!(client.get_network_unit(), 3);
+    }
+
+    #[test]
+    fn test_connection_state_management() {
+        let mut client = BaseHttpClient::default();
+        
+        // Initially no state exists
+        assert!(client.get_current_state().is_none());
+        
+        // Get or create creates new state
+        let state = client.get_connection_state();
+        assert_eq!(state.url, "");
+        assert_eq!(state.status_code, 200);
+        assert!(state.headers.is_empty());
+        
+        // State now exists
+        assert!(client.get_current_state().is_some());
+        
+        // Remove state
+        client.remove_current_connection();
+        assert!(client.get_current_state().is_none());
+    }
+
+    #[test]
+    fn test_multiple_units() {
+        let mut client = BaseHttpClient::default();
+        
+        // Set up unit 1
+        client.parse_network_url("N1:http://example1.com").unwrap();
+        client.get_connection_state().url = "http://example1.com".to_string();
+        
+        // Set up unit 2
+        client.parse_network_url("N2:http://example2.com").unwrap();
+        client.get_connection_state().url = "http://example2.com".to_string();
+        
+        // Verify unit 1 state
+        client.parse_network_url("N1:anything").unwrap();
+        assert_eq!(client.get_connection_state().url, "http://example1.com");
+        
+        // Verify unit 2 state
+        client.parse_network_url("N2:anything").unwrap();
+        assert_eq!(client.get_connection_state().url, "http://example2.com");
+    }
 } 

@@ -1,11 +1,13 @@
-use fujinet_hal::device::network::protocols::{HttpClient, client_provider::HttpClientProvider};
+use fujinet_hal::device::network::protocols::{HttpClient, HttpClientProvider};
 use fujinet_hal::device::DeviceResult;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use async_trait::async_trait;
 
 /// Mock HTTP client provider for testing
-#[derive(Default)]
+/// This mock provides a full implementation that tracks request/response data
+/// and connection state for verification in tests.
+#[derive(Default, Clone)]
 pub struct MockHttpClientProvider;
 
 impl HttpClientProvider for MockHttpClientProvider {
@@ -19,14 +21,13 @@ pub struct MockHttpClient {
     state: Arc<Mutex<MockHttpClientState>>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 struct MockHttpClientState {
     last_method: String,
     last_url: String,
     last_body: Vec<u8>,
     headers: HashMap<String, String>,
     status_code: u16,
-    last_request_headers: HashMap<String, String>,
     response_data: Vec<u8>,
     is_connected: bool,
     network_unit: u8,
@@ -35,25 +36,16 @@ struct MockHttpClientState {
 impl Default for MockHttpClient {
     fn default() -> Self {
         Self {
-            state: Arc::new(Mutex::new(MockHttpClientState {
-                last_method: String::new(),
-                last_url: String::new(),
-                last_body: Vec::new(),
-                headers: HashMap::new(),
-                status_code: 200,
-                last_request_headers: HashMap::new(),
-                response_data: Vec::new(),
-                is_connected: false,
-                network_unit: 1,
-            })),
+            state: Arc::new(Mutex::new(MockHttpClientState::default())),
         }
     }
 }
 
+/// Helper methods for test verification
 pub trait MockHttpClientHelpers {
     fn get_last_request(&self) -> Option<(String, String, Vec<u8>)>;
-    fn get_last_request_headers(&self) -> Option<HashMap<String, String>>;
     fn set_response_data(&self, data: &[u8]);
+    fn set_status_code(&self, code: u16);
     fn is_connected(&self) -> bool;
 }
 
@@ -71,18 +63,14 @@ impl MockHttpClientHelpers for MockHttpClient {
         }
     }
 
-    fn get_last_request_headers(&self) -> Option<HashMap<String, String>> {
-        let state = self.state.lock().unwrap();
-        if state.last_request_headers.is_empty() {
-            None
-        } else {
-            Some(state.last_request_headers.clone())
-        }
-    }
-
     fn set_response_data(&self, data: &[u8]) {
         let mut state = self.state.lock().unwrap();
         state.response_data = data.to_vec();
+    }
+
+    fn set_status_code(&self, code: u16) {
+        let mut state = self.state.lock().unwrap();
+        state.status_code = code;
     }
 
     fn is_connected(&self) -> bool {
@@ -96,7 +84,6 @@ impl HttpClient for MockHttpClient {
         let mut state = self.state.lock().unwrap();
         state.is_connected = true;
         state.last_url = url.to_string();
-        state.last_request_headers = state.headers.clone();
         Ok(())
     }
 
@@ -111,7 +98,6 @@ impl HttpClient for MockHttpClient {
         state.last_method = "GET".to_string();
         state.last_url = url.to_string();
         state.last_body.clear();
-        state.last_request_headers = state.headers.clone();
         Ok(state.response_data.clone())
     }
 
@@ -120,7 +106,6 @@ impl HttpClient for MockHttpClient {
         state.last_method = "POST".to_string();
         state.last_url = url.to_string();
         state.last_body = body.to_vec();
-        state.last_request_headers = state.headers.clone();
         Ok(state.response_data.clone())
     }
 
@@ -129,7 +114,6 @@ impl HttpClient for MockHttpClient {
         state.last_method = "PUT".to_string();
         state.last_url = url.to_string();
         state.last_body = body.to_vec();
-        state.last_request_headers = state.headers.clone();
         Ok(state.response_data.clone())
     }
 
@@ -138,16 +122,14 @@ impl HttpClient for MockHttpClient {
         state.last_method = "DELETE".to_string();
         state.last_url = url.to_string();
         state.last_body.clear();
-        state.last_request_headers = state.headers.clone();
         Ok(state.response_data.clone())
     }
 
-    async fn head(&mut self, url: &str) -> DeviceResult<()> {
+    async fn head(&mut self, url: &str) -> DeviceResult<Vec<u8>> {
         let mut state = self.state.lock().unwrap();
         state.last_method = "HEAD".to_string();
         state.last_url = url.to_string();
-        state.last_request_headers = state.headers.clone();
-        Ok(())
+        Ok(Vec::new())  // HEAD requests return empty body
     }
 
     async fn patch(&mut self, url: &str, body: &[u8]) -> DeviceResult<Vec<u8>> {
@@ -155,7 +137,6 @@ impl HttpClient for MockHttpClient {
         state.last_method = "PATCH".to_string();
         state.last_url = url.to_string();
         state.last_body = body.to_vec();
-        state.last_request_headers = state.headers.clone();
         Ok(state.response_data.clone())
     }
 

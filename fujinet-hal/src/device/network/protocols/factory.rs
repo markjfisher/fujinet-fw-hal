@@ -60,10 +60,12 @@ impl ProtocolFactory {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use super::super::ConnectionStatus;
+    use crate::device::network::protocols::registry::ProtocolHandlerFactory;
+    use crate::device::network::protocols::protocol_handler::{ProtocolHandler, ConnectionStatus};
     use async_trait::async_trait;
     use std::any::Any;
 
+    // Mock implementations should be in test module since they're test-specific
     struct MockProtocol;
 
     #[async_trait]
@@ -81,17 +83,21 @@ mod tests {
 
     struct MockFactory;
 
-    impl super::super::registry::ProtocolHandlerFactory for MockFactory {
+    impl ProtocolHandlerFactory for MockFactory {
         fn create_handler(&self) -> Box<dyn ProtocolHandler> {
             Box::new(MockProtocol)
         }
     }
 
-    #[tokio::test]
-    async fn test_protocol_factory() -> DeviceResult<()> {
+    fn setup_test_registry() -> ProtocolRegistry {
         let mut registry = ProtocolRegistry::new();
         registry.register(NetworkProtocol::Http, Box::new(MockFactory));
-        
+        registry
+    }
+
+    #[tokio::test]
+    async fn test_protocol_factory() -> DeviceResult<()> {
+        let registry = setup_test_registry();
         let mut factory = ProtocolFactory::new(registry);
         
         // Test device creation
@@ -106,6 +112,23 @@ mod tests {
         factory.close_device(0).await?;
         assert!(factory.get_device(0).is_none());
         
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_device_reuse() -> DeviceResult<()> {
+        let registry = setup_test_registry();
+        let mut factory = ProtocolFactory::new(registry);
+        
+        let url = NetworkUrl::parse("N:http://test.com")?;
+        
+        // Create first device
+        let id1 = factory.get_or_create_device(0, NetworkProtocol::Http, &url).await?;
+        
+        // Try to create device with same ID - should return existing
+        let id2 = factory.get_or_create_device(0, NetworkProtocol::Http, &url).await?;
+        
+        assert_eq!(id1, id2);
         Ok(())
     }
 }

@@ -155,7 +155,8 @@ In order to work as an application, or a library, this project follows Hardware 
 ## Testing Guidelines
 
 1. Test Organization:
-   - Tests follow same layer structure as code
+   - Unit tests in the files the trait or implementation are created in
+   - Integration Tests follow same layer structure as code in the "tests" subfolder
    - Each component has dedicated test suite
    - Mock implementations for dependencies
    - Test both success and error paths

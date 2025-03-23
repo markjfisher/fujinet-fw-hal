@@ -239,4 +239,209 @@ impl ProtocolHandler for HttpProtocol {
     async fn available(&self) -> DeviceResult<usize> {
         Ok(0)
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::device::DeviceError;
+    use crate::device::network::protocols::HttpClient;
+    use std::collections::HashMap;
+    use std::sync::{Arc, Mutex};
+
+    // Mock HTTP client for testing
+    #[derive(Clone)]
+    struct TestHttpClient {
+        state: Arc<Mutex<TestHttpClientState>>,
+    }
+
+    #[derive(Default)]
+    struct TestHttpClientState {
+        last_method: String,
+        last_url: String,
+        last_body: Vec<u8>,
+        headers: HashMap<String, String>,
+        response_data: Vec<u8>,
+        is_connected: bool,
+    }
+
+    #[async_trait]
+    impl HttpClient for TestHttpClient {
+        async fn connect(&mut self, url: &str) -> DeviceResult<()> {
+            let mut state = self.state.lock().unwrap();
+            state.is_connected = true;
+            state.last_url = url.to_string();
+            Ok(())
+        }
+
+        async fn disconnect(&mut self) -> DeviceResult<()> {
+            let mut state = self.state.lock().unwrap();
+            state.is_connected = false;
+            Ok(())
+        }
+
+        async fn get(&mut self, url: &str) -> DeviceResult<Vec<u8>> {
+            let mut state = self.state.lock().unwrap();
+            state.last_method = "GET".to_string();
+            state.last_url = url.to_string();
+            Ok(state.response_data.clone())
+        }
+
+        async fn post(&mut self, url: &str, body: &[u8]) -> DeviceResult<Vec<u8>> {
+            let mut state = self.state.lock().unwrap();
+            state.last_method = "POST".to_string();
+            state.last_url = url.to_string();
+            state.last_body = body.to_vec();
+            Ok(state.response_data.clone())
+        }
+
+        async fn put(&mut self, url: &str, body: &[u8]) -> DeviceResult<Vec<u8>> {
+            let mut state = self.state.lock().unwrap();
+            state.last_method = "PUT".to_string();
+            state.last_url = url.to_string();
+            state.last_body = body.to_vec();
+            Ok(state.response_data.clone())
+        }
+
+        async fn delete(&mut self, url: &str) -> DeviceResult<Vec<u8>> {
+            let mut state = self.state.lock().unwrap();
+            state.last_method = "DELETE".to_string();
+            state.last_url = url.to_string();
+            Ok(state.response_data.clone())
+        }
+
+        async fn head(&mut self, url: &str) -> DeviceResult<Vec<u8>> {
+            let mut state = self.state.lock().unwrap();
+            state.last_method = "HEAD".to_string();
+            state.last_url = url.to_string();
+            Ok(Vec::new())  // HEAD returns empty body
+        }
+
+        async fn patch(&mut self, url: &str, body: &[u8]) -> DeviceResult<Vec<u8>> {
+            let mut state = self.state.lock().unwrap();
+            state.last_method = "PATCH".to_string();
+            state.last_url = url.to_string();
+            state.last_body = body.to_vec();
+            Ok(state.response_data.clone())
+        }
+
+        fn set_header(&mut self, key: &str, value: &str) {
+            let mut state = self.state.lock().unwrap();
+            state.headers.insert(key.to_string(), value.to_string());
+        }
+
+        fn get_headers(&self) -> HashMap<String, String> {
+            self.state.lock().unwrap().headers.clone()
+        }
+
+        fn get_status_code(&self) -> u16 { 200 }
+        fn get_network_unit(&self) -> u8 { 1 }
+    }
+
+    impl Default for TestHttpClient {
+        fn default() -> Self {
+            Self {
+                state: Arc::new(Mutex::new(TestHttpClientState::default())),
+            }
+        }
+    }
+
+    // Helper methods for test verification
+    impl TestHttpClient {
+        fn get_last_request(&self) -> Option<(String, String, Vec<u8>)> {
+            let state = self.state.lock().unwrap();
+            if state.last_method.is_empty() {
+                None
+            } else {
+                Some((
+                    state.last_method.clone(),
+                    state.last_url.clone(),
+                    state.last_body.clone(),
+                ))
+            }
+        }
+
+        fn set_response_data(&self, data: &[u8]) {
+            let mut state = self.state.lock().unwrap();
+            state.response_data = data.to_vec();
+        }
+
+        fn is_connected(&self) -> bool {
+            self.state.lock().unwrap().is_connected
+        }
+    }
+
+    #[tokio::test]
+    async fn test_protocol_lifecycle() {
+        let mut protocol = HttpProtocol::new_without_client();
+        assert_eq!(protocol.status().await.unwrap(), ConnectionStatus::Disconnected);
+        
+        // Test operations without client should fail
+        assert!(matches!(protocol.open("test").await, Err(DeviceError::NotReady)));
+        assert!(matches!(protocol.close().await, Err(DeviceError::NotReady)));
+        assert!(matches!(protocol.read(&mut [0; 10]).await, Err(DeviceError::NotReady)));
+        assert!(matches!(protocol.write(&[0; 10]).await, Err(DeviceError::NotReady)));
+
+        // Set client and test connection lifecycle
+        let client = TestHttpClient::default();
+        protocol.set_http_client(Box::new(client.clone()));
+        
+        protocol.open("http://test.com").await.unwrap();
+        assert!(client.is_connected());
+        
+        protocol.close().await.unwrap();
+        assert!(!client.is_connected());
+    }
+
+    #[tokio::test]
+    async fn test_protocol_io() -> DeviceResult<()> {
+        let mut protocol = HttpProtocol::new_without_client();
+        let client = TestHttpClient::default();
+        protocol.set_http_client(Box::new(client.clone()));
+
+        // Setup test data
+        let test_url = "http://test.com";
+        client.set_response_data(b"test response");
+        protocol.open(test_url).await?;
+
+        // Test write (POST)
+        let test_data = b"test request";
+        protocol.write(test_data).await?;
+        let (method, url, body) = client.get_last_request().unwrap();
+        assert_eq!(method, "POST");
+        assert_eq!(url, test_url);
+        assert_eq!(body, test_data);
+
+        // Test read (should trigger GET)
+        let mut buf = vec![0; 100];
+        let read = protocol.read(&mut buf).await?;
+        assert_eq!(&buf[..read], b"test response");
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_protocol_headers() -> DeviceResult<()> {
+        let mut protocol = HttpProtocol::new_without_client();
+        let client = TestHttpClient::default();
+        protocol.set_http_client(Box::new(client.clone()));
+        protocol.open("http://test.com").await?;
+
+        // Add headers
+        protocol.add_header("Content-Type", "application/json").await?;
+        protocol.add_header("Authorization", "Bearer token").await?;
+
+        // Verify headers were set
+        let headers = protocol.get_headers().await?;
+        assert_eq!(headers.get("Content-Type").unwrap(), "application/json");
+        assert_eq!(headers.get("Authorization").unwrap(), "Bearer token");
+
+        // Verify headers are sent with request
+        protocol.get("http://test.com").await?;
+        let headers = client.get_headers();
+        assert_eq!(headers.get("Content-Type").unwrap(), "application/json");
+        assert_eq!(headers.get("Authorization").unwrap(), "Bearer token");
+
+        Ok(())
+    }
 } 
