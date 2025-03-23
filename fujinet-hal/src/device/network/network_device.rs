@@ -160,11 +160,16 @@ mod tests {
         }
     }
 
+    // Helper function to create a boxed test protocol
+    fn create_test_protocol() -> Box<dyn ProtocolHandler> {
+        Box::new(TestProtocol::default())
+    }
+
     #[tokio::test]
     async fn test_device_lifecycle() -> DeviceResult<()> {
-        let device = NetworkDeviceImpl::new(
+        let mut device = NetworkDeviceImpl::new(
             "test://example.com".to_string(),
-            TestProtocol::default()
+            create_test_protocol()
         );
 
         // Test initial state
@@ -183,9 +188,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_device_io() -> DeviceResult<()> {
-        let device = NetworkDeviceImpl::new(
+        let mut device = NetworkDeviceImpl::new(
             "test://example.com".to_string(),
-            TestProtocol::default()
+            create_test_protocol()
         );
 
         device.open().await?;
@@ -205,9 +210,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_block_operations_not_supported() -> DeviceResult<()> {
-        let device = NetworkDeviceImpl::new(
+        let mut device = NetworkDeviceImpl::new(
             "test://example.com".to_string(),
-            TestProtocol::default()
+            create_test_protocol()
         );
 
         let mut buf = vec![0u8; 100];
