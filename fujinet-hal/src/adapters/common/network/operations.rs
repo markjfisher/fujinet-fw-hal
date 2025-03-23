@@ -111,18 +111,22 @@ mod tests {
     use crate::device::network::NetworkUrl;
     use crate::device::manager::DeviceState;
     use crate::device::network::NetworkDevice;
+    use crate::device::network::protocols::{ProtocolHandler, ConnectionStatus};
+    use crate::device::{Device, DeviceStatus};
     use async_trait::async_trait;
+    use std::collections::HashMap;
+    use std::any::Any;
 
-    // Create a test-specific network manager that avoids reference issues
     struct TestNetworkManager {
         parse_result: Option<(usize, NetworkUrl)>,
         open_result: bool,
         close_result: bool,
+        device: Option<Box<dyn NetworkDevice>>,  // Add device storage
     }
 
     #[async_trait]
     impl NetworkManager for TestNetworkManager {
-        fn parse_device_spec(&self, spec: &str) -> DeviceResult<(usize, NetworkUrl)> {
+        fn parse_device_spec(&self, _spec: &str) -> DeviceResult<(usize, NetworkUrl)> {
             self.parse_result.clone().ok_or(DeviceError::InvalidUrl)
         }
 
@@ -147,7 +151,143 @@ mod tests {
         }
 
         fn get_network_device(&mut self, _device_id: usize) -> Option<&mut Box<dyn NetworkDevice>> {
-            None
+            self.device.as_mut()
+        }
+    }
+
+    // Mock HTTP protocol for testing
+    struct MockHttpProtocol {
+        post_result: Result<(), DeviceError>,
+    }
+
+    impl MockHttpProtocol {
+        fn new(post_result: Result<(), DeviceError>) -> Self {
+            Self { post_result }
+        }
+    }
+
+    #[async_trait]
+    impl HttpProtocolHandler for MockHttpProtocol {
+        async fn send_request(&mut self, _method: &str, _url: &str, _body: &[u8]) -> DeviceResult<()> {
+            Ok(())
+        }
+        
+        async fn add_header(&mut self, _key: &str, _value: &str) -> DeviceResult<()> {
+            Ok(())
+        }
+        
+        async fn get_status_code(&self) -> DeviceResult<u16> {
+            Ok(200)
+        }
+        
+        async fn get_headers(&self) -> DeviceResult<HashMap<String, String>> {
+            Ok(HashMap::new())
+        }
+
+        async fn post(&mut self, _url: &str, _body: &[u8]) -> DeviceResult<()> {
+            self.post_result.clone()
+        }
+    }
+
+    #[async_trait]
+    impl ProtocolHandler for MockHttpProtocol {
+        fn as_any(&self) -> &dyn Any {
+            self
+        }
+
+        fn as_any_mut(&mut self) -> &mut dyn Any {
+            self
+        }
+
+        async fn open(&mut self, _endpoint: &str) -> DeviceResult<()> {
+            Ok(())
+        }
+
+        async fn close(&mut self) -> DeviceResult<()> {
+            Ok(())
+        }
+
+        async fn write(&mut self, _buf: &[u8]) -> DeviceResult<usize> {
+            Ok(0)
+        }
+
+        async fn read(&mut self, _buf: &mut [u8]) -> DeviceResult<usize> {
+            Ok(0)
+        }
+
+        async fn status(&self) -> DeviceResult<ConnectionStatus> {
+            Ok(ConnectionStatus::Connected)
+        }
+
+        async fn available(&self) -> DeviceResult<usize> {
+            Ok(0)
+        }
+    }
+
+    // Mock network device for testing
+    struct MockNetworkDevice {
+        protocol: Box<dyn ProtocolHandler>,
+    }
+
+    #[async_trait]
+    impl Device for MockNetworkDevice {
+        fn as_any(&self) -> &dyn Any {
+            self
+        }
+
+        fn as_any_mut(&mut self) -> &mut dyn Any {
+            self
+        }
+
+        fn name(&self) -> &str {
+            "mock_network_device"
+        }
+
+        async fn open(&mut self) -> DeviceResult<()> {
+            Ok(())
+        }
+
+        async fn close(&mut self) -> DeviceResult<()> {
+            Ok(())
+        }
+
+        async fn read_bytes(&mut self, _buf: &mut [u8]) -> DeviceResult<usize> {
+            Ok(0)
+        }
+
+        async fn write_bytes(&mut self, _buf: &[u8]) -> DeviceResult<usize> {
+            Ok(0)
+        }
+
+        async fn read_block(&mut self, _block: u32, _buf: &mut [u8]) -> DeviceResult<usize> {
+            Ok(0)
+        }
+
+        async fn write_block(&mut self, _block: u32, _buf: &[u8]) -> DeviceResult<usize> {
+            Ok(0)
+        }
+
+        async fn get_status(&self) -> DeviceResult<DeviceStatus> {
+            Ok(DeviceStatus::Ready)
+        }
+    }
+
+    #[async_trait]
+    impl NetworkDevice for MockNetworkDevice {
+        async fn connect(&mut self, endpoint: &str) -> DeviceResult<()> {
+            self.protocol.open(endpoint).await
+        }
+
+        async fn disconnect(&mut self) -> DeviceResult<()> {
+            self.protocol.close().await
+        }
+
+        async fn open_url(&mut self, url: &NetworkUrl) -> DeviceResult<()> {
+            self.protocol.open(&url.url).await
+        }
+
+        fn protocol_handler(&mut self) -> &mut dyn ProtocolHandler {
+            &mut *self.protocol
         }
     }
 
@@ -157,6 +297,7 @@ mod tests {
                 parse_result: None,
                 open_result: false,
                 close_result: false,
+                device: None,
             }
         }
 
@@ -172,6 +313,13 @@ mod tests {
 
         fn with_close_result(mut self, result: bool) -> Self {
             self.close_result = result;
+            self
+        }
+
+        fn with_http_device(mut self, post_result: Result<(), DeviceError>) -> Self {
+            let protocol = Box::new(MockHttpProtocol::new(post_result));
+            let device = Box::new(MockNetworkDevice { protocol });
+            self.device = Some(device);
             self
         }
     }
@@ -205,7 +353,7 @@ mod tests {
     }
 
     #[test]
-    fn test_http_post() {
+    fn test_http_post_device_not_found() {
         let manager = TestNetworkManager::new()
             .with_parse_result(1, "N1:http://test.com");
 
@@ -218,5 +366,42 @@ mod tests {
         let result = context.http_post(request);
         assert!(result.is_err());
         assert!(matches!(result.unwrap_err(), AdapterError::DeviceError(DeviceError::InvalidUrl)));
+    }
+
+    #[test]
+    fn test_http_post_success() {
+        let manager = TestNetworkManager::new()
+            .with_parse_result(1, "N1:http://test.com")
+            .with_http_device(Ok(()));
+
+        let context = OperationsContext::new(manager);
+        let request = HttpPostRequest {
+            device_spec: "N1:http://test.com".to_string(),
+            data: vec![1, 2, 3],
+        };
+
+        let result = context.http_post(request);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_http_post_network_error() {
+        let manager = TestNetworkManager::new()
+            .with_parse_result(1, "N1:http://test.com")
+            .with_http_device(Err(DeviceError::NetworkError("test error".to_string())));
+
+        let context = OperationsContext::new(manager);
+        let request = HttpPostRequest {
+            device_spec: "N1:http://test.com".to_string(),
+            data: vec![1, 2, 3],
+        };
+
+        let result = context.http_post(request);
+        assert!(result.is_err());
+        if let AdapterError::DeviceError(DeviceError::NetworkError(msg)) = result.unwrap_err() {
+            assert_eq!(msg, "test error");
+        } else {
+            panic!("Expected NetworkError");
+        }
     }
 } 
