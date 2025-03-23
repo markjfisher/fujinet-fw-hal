@@ -1,6 +1,6 @@
 use crate::device::manager::{DeviceManager, DeviceState};
 use crate::device::network::NetworkUrl;
-use crate::device::network::protocols::{NetworkProtocol, ProtocolFactory};
+use crate::device::network::protocols::{NetworkProtocol, ProtocolFactory, ProtocolRegistry};
 use crate::device::network::network_device::NetworkDevice;
 use crate::device::DeviceError;
 use crate::device::DeviceResult;
@@ -36,9 +36,22 @@ pub struct NetworkManagerImpl {
 
 impl NetworkManagerImpl {
     pub fn new() -> Self {
+        // Create a new registry for protocol handlers
+        let registry = ProtocolRegistry::new();
+        
+        // The platform layer should register protocol handlers
+        // This is just the default setup - platforms can provide their own
         Self {
             device_manager: DeviceManager::new(),
-            protocol_factory: ProtocolFactory::new(),
+            protocol_factory: ProtocolFactory::new(registry),
+        }
+    }
+
+    /// Creates a new NetworkManager with a custom protocol registry
+    pub fn with_registry(registry: ProtocolRegistry) -> Self {
+        Self {
+            device_manager: DeviceManager::new(),
+            protocol_factory: ProtocolFactory::new(registry),
         }
     }
 }

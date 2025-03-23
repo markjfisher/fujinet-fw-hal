@@ -68,14 +68,13 @@ pub struct HttpProtocol {
 
 impl HttpProtocol {
     pub fn new(client_provider: &dyn HttpClientProvider) -> Self {
-        let protocol = Self {
+        Self {
             endpoint: String::new(),
             status: ConnectionStatus::Disconnected,
             http_client: Some(client_provider.create_http_client()),
             response_buffer: Vec::new(),
             response_pos: 0,
-        };
-        protocol
+        }
     }
 
     pub fn new_without_client() -> Self {
@@ -90,21 +89,6 @@ impl HttpProtocol {
 
     pub fn set_http_client(&mut self, client: Box<dyn HttpClient>) {
         self.http_client = Some(client);
-    }
-}
-
-impl Default for HttpProtocol {
-    fn default() -> Self {
-        // In non-test builds, use platform implementation
-        #[cfg(not(test))]
-        {
-            use crate::platform::x86::network::DefaultHttpClientProvider;
-            Self::new(&DefaultHttpClientProvider::default())
-        }
-        
-        // In test builds, create without client (tests should inject mock)
-        #[cfg(test)]
-        Self::new_without_client()
     }
 }
 

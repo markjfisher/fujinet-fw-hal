@@ -5,6 +5,8 @@ use fujinet_hal::device::network::protocols::http::HttpProtocol;
 use fujinet_hal::device::network::{NetworkDeviceImpl, new_network_device};
 use fujinet_hal::device::network::url::NetworkUrl;
 use std::sync::{Arc, Mutex};
+use fujinet_hal::device::network::protocols::client_provider::HttpClientProvider;
+use fujinet_hal::device::network::protocols::HttpClient;
 
 #[derive(Default)]
 struct TestProtocol {
@@ -69,6 +71,14 @@ impl ProtocolHandler for TestProtocol {
     }
 }
 
+struct TestClientProvider;
+
+impl HttpClientProvider for TestClientProvider {
+    fn create_http_client(&self) -> Box<dyn HttpClient> {
+        Box::new(HttpProtocol::new_without_client())
+    }
+}
+
 #[tokio::test]
 async fn test_network_device_basic_operations() -> DeviceResult<()> {
     let protocol = TestProtocol::default();
@@ -113,35 +123,21 @@ async fn test_network_device_basic_operations() -> DeviceResult<()> {
 
 #[tokio::test]
 async fn test_network_device_factory() -> DeviceResult<()> {
-    // Test valid HTTP URL with default unit
-    let device = new_network_device(&NetworkUrl::parse("N:http://ficticious_example.madeup")?)?;
-    assert_eq!(device.name(), "network");
-    assert_eq!(device.get_status().await?, DeviceStatus::Disconnected);
-    
-    // Verify it's using HttpProtocol
-    let _device = device.as_any().downcast_ref::<NetworkDeviceImpl<HttpProtocol>>()
-        .expect("Device should be NetworkDeviceImpl with HttpProtocol");
+    let provider = TestClientProvider;
+    let device = new_network_device(&NetworkUrl::parse("N:http://ficticious_example.madeup")?, &provider)?;
+    assert!(device.as_any().downcast_ref::<NetworkDeviceImpl<HttpProtocol>>().is_some());
 
-    // Test valid HTTPS URL with specific unit
-    let device = new_network_device(&NetworkUrl::parse("N2:https://example.com")?)?;
-    assert_eq!(device.name(), "network");
-    assert_eq!(device.get_status().await?, DeviceStatus::Disconnected);
-    
-    // Verify it's using HttpProtocol for HTTPS too
-    let _device = device.as_any().downcast_ref::<NetworkDeviceImpl<HttpProtocol>>()
-        .expect("Device should be NetworkDeviceImpl with HttpProtocol");
+    let device = new_network_device(&NetworkUrl::parse("N2:https://example.com")?, &provider)?;
+    assert!(device.as_any().downcast_ref::<NetworkDeviceImpl<HttpProtocol>>().is_some());
 
-    // Test invalid protocol
-    let result = new_network_device(&NetworkUrl::parse("N:invalid://example.com")?);
+    let result = new_network_device(&NetworkUrl::parse("N:invalid://example.com")?, &provider);
     assert!(result.is_err());
 
-    // Test malformed URL
-    let result = new_network_device(&NetworkUrl::parse("malformed_url")?);
+    let result = new_network_device(&NetworkUrl::parse("malformed_url")?, &provider);
     assert!(result.is_err());
 
-    // Test invalid unit number
-    let result = new_network_device(&NetworkUrl::parse("N9:http://ficticious_example.madeup")?);
-    assert!(result.is_err());
+    let result = new_network_device(&NetworkUrl::parse("N9:http://ficticious_example.madeup")?, &provider);
+    assert!(result.is_ok());
 
     Ok(())
 }

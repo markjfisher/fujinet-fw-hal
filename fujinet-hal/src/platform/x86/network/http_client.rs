@@ -1,9 +1,9 @@
-use std::collections::HashMap;
 use async_trait::async_trait;
+use std::collections::HashMap;
+use reqwest;
+
 use crate::device::DeviceResult;
-use crate::device::network::protocols::HttpClient;
-use crate::device::network::protocols::http_client::BaseHttpClient;
-use crate::device::network::protocols::client_provider::HttpClientProvider;
+use crate::device::network::protocols::{HttpClient, BaseHttpClient, HttpClientProvider};
 use reqwest::Client as ReqwestClient;
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 
@@ -168,7 +168,7 @@ impl HttpClient for X86HttpClient {
         Ok(body.to_vec())
     }
 
-    async fn head(&mut self, url: &str) -> DeviceResult<()> {
+    async fn head(&mut self, url: &str) -> DeviceResult<Vec<u8>> {
         let real_url = self.base.parse_network_url(url)?;
         self.base.update_url_if_changed(real_url.clone());
         let state = self.base.get_connection_state();
@@ -193,7 +193,7 @@ impl HttpClient for X86HttpClient {
         // Store status code
         state.status_code = response.status().as_u16();
 
-        Ok(())
+        Ok(Vec::new())
     }
 
     async fn patch(&mut self, url: &str, body: &[u8]) -> DeviceResult<Vec<u8>> {
