@@ -32,7 +32,7 @@ async fn test_protocol_factory_integration() -> DeviceResult<()> {
     let mut factory = ProtocolFactory::new(registry);
     
     // Test HTTP protocol creation
-    let url = NetworkUrl::parse("N:http://example.com")?;
+    let url = NetworkUrl::parse("N:http://ficticious_example.madeup")?;
     let device_id = factory.get_or_create_device(0, NetworkProtocol::Http, &url).await?;
     let device = factory.get_device(device_id).unwrap();
     
