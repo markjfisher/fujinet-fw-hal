@@ -26,10 +26,6 @@ impl NetworkProtocol {
     }
 }
 
-pub fn is_protocol_supported(protocol_str: &str) -> bool {
-    NetworkProtocol::from_str(protocol_str).is_some()
-}
-
 /// Registry for protocol handlers
 /// Maps protocol types to their factories
 /// Lives in device layer but accepts platform-specific factories
