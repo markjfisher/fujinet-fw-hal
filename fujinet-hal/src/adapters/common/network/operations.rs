@@ -116,7 +116,7 @@ mod tests {
     use crate::device::network::NetworkUrl;
     use crate::device::manager::DeviceState;
     use crate::device::network::NetworkDevice;
-    use crate::device::network::protocols::{ProtocolHandler, ConnectionStatus, HttpClient};
+    use crate::device::network::protocols::{ProtocolHandler, HttpClient};
     use crate::device::{Device, DeviceStatus};
     use async_trait::async_trait;
     use std::collections::HashMap;
@@ -241,70 +241,18 @@ mod tests {
             self.device = Some(device);
             self
         }
-    }
 
-    // Mock HTTP protocol for testing
-    struct MockHttpProtocol {
-        post_result: Result<(), DeviceError>,
-    }
-
-    #[async_trait]
-    impl ProtocolHandler for MockHttpProtocol {
-        fn as_any(&self) -> &dyn Any {
+        fn _with_open_result(mut self, open_result: bool) -> Self {
+            self.open_result = open_result;
             self
         }
 
-        fn as_any_mut(&mut self) -> &mut dyn Any {
+        fn _with_close_result(mut self, close_result: bool) -> Self {
+            self.close_result = close_result;
             self
         }
-
-        async fn open(&mut self, _endpoint: &str) -> DeviceResult<()> {
-            Ok(())
-        }
-
-        async fn close(&mut self) -> DeviceResult<()> {
-            Ok(())
-        }
-
-        async fn write(&mut self, _buf: &[u8]) -> DeviceResult<usize> {
-            Ok(0)
-        }
-
-        async fn read(&mut self, _buf: &mut [u8]) -> DeviceResult<usize> {
-            Ok(0)
-        }
-
-        async fn status(&self) -> DeviceResult<ConnectionStatus> {
-            Ok(ConnectionStatus::Connected)
-        }
-
-        async fn available(&self) -> DeviceResult<usize> {
-            Ok(0)
-        }
     }
 
-    #[async_trait]
-    impl HttpProtocolHandler for MockHttpProtocol {
-        async fn send_request(&mut self, _method: &str, _url: &str, _body: &[u8]) -> DeviceResult<()> {
-            Ok(())
-        }
-        
-        async fn add_header(&mut self, _key: &str, _value: &str) -> DeviceResult<()> {
-            Ok(())
-        }
-        
-        async fn get_status_code(&self) -> DeviceResult<u16> {
-            Ok(200)
-        }
-        
-        async fn get_headers(&self) -> DeviceResult<HashMap<String, String>> {
-            Ok(HashMap::new())
-        }
-
-        async fn post(&mut self, _url: &str, _body: &[u8]) -> DeviceResult<()> {
-            self.post_result.clone()
-        }
-    }
 
     // Mock network device for testing
     struct MockNetworkDevice {
@@ -424,5 +372,78 @@ mod tests {
         } else {
             panic!("Expected NetworkError");
         }
+    }
+
+    #[test]
+    fn test_open_device_success() {
+        let manager = TestNetworkManager::new()
+            .with_parse_result(1, "N1:http://test.com")
+            ._with_open_result(true);
+
+        let context = OperationsContext::new(manager);
+        let request = DeviceOpenRequest {
+            device_spec: "N1:http://test.com".to_string(),
+            mode: 0,
+            translation: 0,
+        };
+
+        let result = context.open_device(request);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), 1);
+    }
+
+    #[test]
+    fn test_open_device_invalid_spec() {
+        let manager = TestNetworkManager::new();  // No parse result set = invalid spec
+
+        let context = OperationsContext::new(manager);
+        let request = DeviceOpenRequest {
+            device_spec: "invalid".to_string(),
+            mode: 0,
+            translation: 0,
+        };
+
+        let result = context.open_device(request);
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), AdapterError::InvalidDeviceSpec));
+    }
+
+    #[test]
+    fn test_open_device_open_error() {
+        let manager = TestNetworkManager::new()
+            .with_parse_result(1, "N1:http://test.com")
+            ._with_open_result(false);  // Will cause open to fail
+
+        let context = OperationsContext::new(manager);
+        let request = DeviceOpenRequest {
+            device_spec: "N1:http://test.com".to_string(),
+            mode: 0,
+            translation: 0,
+        };
+
+        let result = context.open_device(request);
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), AdapterError::DeviceError(DeviceError::InvalidUrl)));
+    }
+
+    #[test]
+    fn test_close_device_success() {
+        let manager = TestNetworkManager::new()
+            ._with_close_result(true);
+
+        let context = OperationsContext::new(manager);
+        let result = context.close_device(1);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_close_device_failure() {
+        let manager = TestNetworkManager::new()
+            ._with_close_result(false);
+
+        let context = OperationsContext::new(manager);
+        let result = context.close_device(1);
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), AdapterError::DeviceError(DeviceError::InvalidUrl)));
     }
 } 
