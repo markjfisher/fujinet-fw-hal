@@ -10,12 +10,16 @@ use crate::adapters::ffi::error::{
 };
 use crate::device::network::manager::NetworkManagerImpl;
 
+#[cfg(test)]
+use crate::adapters::ffi::test_operations::{setup_test_context, get_test_operations};
+
 // Global operations context
 static OPERATIONS: OnceLock<OperationsContext<NetworkManagerImpl>> = OnceLock::new();
 
 #[no_mangle]
 pub extern "C" fn network_init() -> u8 {
     // Initialize the operations context
+    #[cfg(not(test))]
     let _ = OPERATIONS.get_or_init(|| OperationsContext::default());
     device_result_to_error(Ok(()))
 }
@@ -43,7 +47,11 @@ pub extern "C" fn network_open(devicespec: *const c_char, mode: u8, trans: u8) -
     };
 
     // Get operations context and open device
+    #[cfg(test)]
+    let ops = get_test_operations();
+    #[cfg(not(test))]
     let ops = OPERATIONS.get().expect("Operations context not initialized");
+
     adapter_result_to_ffi(ops.open_device(request))
 }
 
@@ -72,7 +80,11 @@ pub extern "C" fn network_http_post(devicespec: *const c_char, data: *const c_ch
     };
 
     // Get operations context and perform HTTP POST
+    #[cfg(test)]
+    let ops = get_test_operations();
+    #[cfg(not(test))]
     let ops = OPERATIONS.get().expect("Operations context not initialized");
+
     adapter_result_to_ffi(ops.http_post(request))
 }
 
@@ -80,24 +92,22 @@ pub extern "C" fn network_http_post(devicespec: *const c_char, data: *const c_ch
 mod tests {
     use super::*;
     use std::ffi::CString;
-    use crate::adapters::ffi::error::{
-        FN_ERR_BAD_CMD,
-        FN_ERR_OK,
-    };
-    
-    fn init_operations() {
-        // Initialize operations context if not already initialized
-        let _ = network_init();
-    }
+    use crate::adapters::common::network::test_mocks::TestNetworkManager;
 
     #[test]
     fn test_network_init() {
+        let manager = TestNetworkManager::new()
+            .with_parse_result(1, "N1:http://test.com")
+            .with_open_result(true);
+        setup_test_context(manager);
+
         assert_eq!(network_init(), FN_ERR_OK);
     }
 
     #[test]
     fn test_ffi_null_pointers() {
-        init_operations();
+        let manager = TestNetworkManager::new();
+        setup_test_context(manager);
 
         // Test null pointers in network_open
         assert_eq!(network_open(std::ptr::null(), 0, 0), FN_ERR_BAD_CMD);
@@ -112,7 +122,8 @@ mod tests {
 
     #[test]
     fn test_ffi_invalid_utf8() {
-        init_operations();
+        let manager = TestNetworkManager::new();
+        setup_test_context(manager);
 
         // Test invalid UTF-8 sequences
         let invalid_utf8 = unsafe { CString::from_vec_unchecked(vec![0xFF, 0xFE, 0x00]) };
@@ -125,7 +136,10 @@ mod tests {
 
     #[test]
     fn test_ffi_error_codes() {
-        init_operations();
+        let manager = TestNetworkManager::new()
+            .with_parse_result(1, "N1:http://test.com")
+            .with_open_result(true);
+        setup_test_context(manager);
 
         // Test that invalid URLs return BAD_CMD
         let invalid_url = CString::new("not_a_url").unwrap();
@@ -142,7 +156,9 @@ mod tests {
 
     #[test]
     fn test_ffi_post_without_open() {
-        init_operations();
+        let manager = TestNetworkManager::new()
+            .with_parse_result(1, "N1:http://test.com");
+        setup_test_context(manager);
 
         // Test that posting to an unopened device returns BAD_CMD
         let url = CString::new("N1:http://ficticious_example.madeup").unwrap();
@@ -152,7 +168,10 @@ mod tests {
 
     #[test]
     fn test_ffi_device_modes() {
-        init_operations();
+        let manager = TestNetworkManager::new()
+            .with_parse_result(1, "N1:http://test.com")
+            .with_open_result(true);
+        setup_test_context(manager);
 
         // Test different device modes through FFI
         let modes = [
