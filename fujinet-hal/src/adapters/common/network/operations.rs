@@ -84,8 +84,10 @@ impl<M: NetworkManager> OperationsContext<M> {
         let device = manager.get_network_device(device_id)
             .ok_or(AdapterError::DeviceError(DeviceError::InvalidUrl))?;
 
-        // Get the protocol handler and verify it supports HTTP
+        // Get the protocol handler and verify it implements HttpProtocolHandler
         let protocol = device.protocol_handler();
+        
+        // Try to downcast to HttpProtocol first (production case)
         let http_protocol = protocol.as_any_mut()
             .downcast_mut::<HttpProtocol>()
             .ok_or(AdapterError::DeviceError(DeviceError::UnsupportedProtocol))?;
@@ -114,11 +116,66 @@ mod tests {
     use crate::device::network::NetworkUrl;
     use crate::device::manager::DeviceState;
     use crate::device::network::NetworkDevice;
-    use crate::device::network::protocols::{ProtocolHandler, ConnectionStatus, HttpProtocolHandler};
+    use crate::device::network::protocols::{ProtocolHandler, ConnectionStatus, HttpClient};
     use crate::device::{Device, DeviceStatus};
     use async_trait::async_trait;
     use std::collections::HashMap;
     use std::any::Any;
+
+    // Mock HTTP client for testing
+    struct MockHttpClient {
+        post_result: Result<(), DeviceError>,
+    }
+
+    #[async_trait]
+    impl HttpClient for MockHttpClient {
+        async fn connect(&mut self, _url: &str) -> DeviceResult<()> {
+            Ok(())
+        }
+
+        async fn disconnect(&mut self) -> DeviceResult<()> {
+            Ok(())
+        }
+
+        fn set_header(&mut self, _key: &str, _value: &str) {
+        }
+
+        async fn get(&mut self, _url: &str) -> DeviceResult<Vec<u8>> {
+            Ok(vec![])
+        }
+
+        async fn post(&mut self, _url: &str, _body: &[u8]) -> DeviceResult<Vec<u8>> {
+            self.post_result.clone().map(|_| vec![])
+        }
+
+        async fn put(&mut self, _url: &str, _body: &[u8]) -> DeviceResult<Vec<u8>> {
+            Ok(vec![])
+        }
+
+        async fn delete(&mut self, _url: &str) -> DeviceResult<Vec<u8>> {
+            Ok(vec![])
+        }
+
+        async fn head(&mut self, _url: &str) -> DeviceResult<Vec<u8>> {
+            Ok(vec![])
+        }
+
+        async fn patch(&mut self, _url: &str, _body: &[u8]) -> DeviceResult<Vec<u8>> {
+            Ok(vec![])
+        }
+
+        fn get_status_code(&self) -> u16 {
+            200
+        }
+
+        fn get_headers(&self) -> HashMap<String, String> {
+            HashMap::new()
+        }
+
+        fn get_network_unit(&self) -> u8 {
+            1 // Default test network unit
+        }
+    }
 
     struct TestNetworkManager {
         parse_result: Option<(usize, NetworkUrl)>,
@@ -155,6 +212,34 @@ mod tests {
 
         fn get_network_device(&mut self, _device_id: usize) -> Option<&mut Box<dyn NetworkDevice>> {
             self.device.as_mut()
+        }
+    }
+
+    impl TestNetworkManager {
+        fn new() -> Self {
+            Self {
+                parse_result: None,
+                open_result: false,
+                close_result: false,
+                device: None,
+            }
+        }
+
+        fn with_parse_result(mut self, device_id: usize, url: &str) -> Self {
+            self.parse_result = Some((device_id, NetworkUrl::parse(url).unwrap()));
+            self
+        }
+
+        fn with_http_device(mut self, post_result: Result<(), DeviceError>) -> Self {
+            // Create a real HttpProtocol instance with a mock client for testing
+            let mut protocol = HttpProtocol::new_without_client();
+            protocol.set_http_client(Box::new(MockHttpClient { post_result }));
+            
+            let device = Box::new(MockNetworkDevice { 
+                protocol: Box::new(protocol)
+            });
+            self.device = Some(device);
+            self
         }
     }
 
@@ -285,39 +370,6 @@ mod tests {
 
         fn protocol_handler(&mut self) -> &mut dyn ProtocolHandler {
             &mut *self.protocol
-        }
-    }
-
-    impl TestNetworkManager {
-        fn new() -> Self {
-            Self {
-                parse_result: None,
-                open_result: false,
-                close_result: false,
-                device: None,
-            }
-        }
-
-        fn with_parse_result(mut self, device_id: usize, url: &str) -> Self {
-            self.parse_result = Some((device_id, NetworkUrl::parse(url).unwrap()));
-            self
-        }
-
-        fn _with_open_result(mut self, result: bool) -> Self {
-            self.open_result = result;
-            self
-        }
-
-        fn _with_close_result(mut self, result: bool) -> Self {
-            self.close_result = result;
-            self
-        }
-
-        fn with_http_device(mut self, post_result: Result<(), DeviceError>) -> Self {
-            let protocol = Box::new(MockHttpProtocol { post_result });
-            let device = Box::new(MockNetworkDevice { protocol });
-            self.device = Some(device);
-            self
         }
     }
 
