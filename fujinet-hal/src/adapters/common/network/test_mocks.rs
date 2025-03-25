@@ -74,8 +74,18 @@ pub struct TestNetworkManager {
 
 #[async_trait]
 impl NetworkManager for TestNetworkManager {
-    fn parse_device_spec(&self, _spec: &str) -> DeviceResult<(usize, NetworkUrl)> {
-        self.parse_result.clone().ok_or(DeviceError::InvalidUrl)
+    fn parse_device_spec(&self, spec: &str) -> DeviceResult<(usize, NetworkUrl)> {
+        // If we have a parse_result, check if the spec matches
+        if let Some((device_id, url)) = &self.parse_result {
+            // Parse the incoming spec to compare
+            if let Ok(parsed_url) = NetworkUrl::parse(spec) {
+                if parsed_url.url == url.url {
+                    return Ok((*device_id, url.clone()));
+                }
+            }
+        }
+        // Return InvalidUrl for any non-matching spec
+        Err(DeviceError::InvalidUrl)
     }
 
     async fn open_device(&mut self, _spec: &str, _mode: u8, _trans: u8) -> DeviceResult<()> {
