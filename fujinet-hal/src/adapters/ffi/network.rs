@@ -15,6 +15,9 @@ use crate::device::network::manager::{NetworkManager, NetworkManagerImpl};
 // Global operations context that can work with any NetworkManager implementation
 static OPERATIONS: OnceLock<Box<dyn NetworkOperations>> = OnceLock::new();
 
+#[cfg(test)]
+static mut TEST_OPERATIONS: Option<Box<dyn NetworkOperations>> = None;
+
 // Trait to abstract over different OperationsContext types
 trait NetworkOperations: Send + Sync {
     fn open_device(&self, request: DeviceOpenRequest) -> Result<usize, AdapterError>;
@@ -39,14 +42,42 @@ fn init_operations() {
     });
 }
 
+// Test-only functions to manage operations state
+#[cfg(test)]
+mod test_utils {
+    use super::*;
+
+    // Reset the operations state before each test
+    pub fn reset_operations() {
+        unsafe {
+            TEST_OPERATIONS = None;
+        }
+    }
+
+    // Get the current operations context
+    pub fn get_operations() -> &'static Box<dyn NetworkOperations> {
+        unsafe {
+            TEST_OPERATIONS.as_ref().expect("Test operations not initialized")
+        }
+    }
+
+    // Set the operations context for tests
+    pub fn set_operations<M: NetworkManager + Send + Sync + 'static>(context: OperationsContext<M>) {
+        unsafe {
+            TEST_OPERATIONS = Some(Box::new(context));
+        }
+    }
+}
+
 // Initialize with a specific operations context (used in tests)
 #[cfg(test)]
 fn init_test_operations<M: NetworkManager + Send + Sync + 'static>(context: OperationsContext<M>) {
-    let _ = OPERATIONS.set(Box::new(context));
+    test_utils::set_operations(context);
 }
 
 #[no_mangle]
 pub extern "C" fn network_init() -> u8 {
+    #[cfg(not(test))]
     init_operations();
     device_result_to_error(Ok(()))
 }
@@ -74,7 +105,11 @@ pub extern "C" fn network_open(devicespec: *const c_char, mode: u8, trans: u8) -
     };
 
     // Get operations context and open device
+    #[cfg(not(test))]
     let ops = OPERATIONS.get().expect("Operations context not initialized");
+    #[cfg(test)]
+    let ops = test_utils::get_operations();
+
     adapter_result_to_ffi(ops.open_device(request))
 }
 
@@ -103,7 +138,11 @@ pub extern "C" fn network_http_post(devicespec: *const c_char, data: *const c_ch
     };
 
     // Get operations context and perform HTTP POST
+    #[cfg(not(test))]
     let ops = OPERATIONS.get().expect("Operations context not initialized");
+    #[cfg(test)]
+    let ops = test_utils::get_operations();
+
     adapter_result_to_ffi(ops.http_post(request))
 }
 
@@ -114,6 +153,8 @@ mod tests {
     use crate::adapters::common::network::test_mocks::TestNetworkManager;
 
     fn setup_test_context(manager: TestNetworkManager) {
+        // Reset operations state before each test
+        test_utils::reset_operations();
         // Create test operations context and initialize it
         let context = OperationsContext::new(manager);
         init_test_operations(context);
