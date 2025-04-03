@@ -28,12 +28,6 @@ impl Clone for MockHttpClient {
     }
 }
 
-impl MockHttpClient {
-    pub fn get_recorded_requests(&self) -> Arc<Mutex<Vec<(String, Vec<u8>)>>> {
-        self.recorded_requests.clone()
-    }
-}
-
 #[async_trait]
 impl HttpClient for MockHttpClient {
     async fn connect(&mut self, _url: &str) -> DeviceResult<()> {
