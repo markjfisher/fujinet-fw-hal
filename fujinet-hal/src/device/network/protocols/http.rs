@@ -2,238 +2,124 @@ use std::collections::HashMap;
 use crate::device::{DeviceError, DeviceResult};
 use super::{ProtocolHandler, ConnectionStatus, HttpClient, client_provider::HttpClientProvider};
 use async_trait::async_trait;
+use std::any::Any;
+use std::sync::Arc;
 
-#[async_trait]
-pub trait HttpProtocolHandler: ProtocolHandler + std::any::Any {
-    /// Send an HTTP request
-    async fn send_request(&mut self, method: &str, url: &str, body: &[u8]) -> DeviceResult<()>;
-    
-    /// Add a header to the current request
-    async fn add_header(&mut self, key: &str, value: &str) -> DeviceResult<()>;
-    
-    /// Get the status code of the last response
-    async fn get_status_code(&self) -> DeviceResult<u16>;
-    
-    /// Get the headers of the last response
-    async fn get_headers(&self) -> DeviceResult<HashMap<String, String>>;
-    
-    /// Convenience methods
-    async fn get(&mut self, url: &str) -> DeviceResult<()> {
-        self.send_request("GET", url, &[]).await
-    }
-    
-    async fn post(&mut self, url: &str, body: &[u8]) -> DeviceResult<()> {
-        self.send_request("POST", url, body).await
-    }
-    
-    async fn put(&mut self, url: &str, body: &[u8]) -> DeviceResult<()> {
-        self.send_request("PUT", url, body).await
-    }
-    
-    async fn delete(&mut self, url: &str) -> DeviceResult<()> {
-        self.send_request("DELETE", url, &[]).await
-    }
-    
-    async fn head(&mut self, url: &str) -> DeviceResult<()> {
-        self.send_request("HEAD", url, &[]).await
-    }
-    
-    async fn patch(&mut self, url: &str, body: &[u8]) -> DeviceResult<()> {
-        self.send_request("PATCH", url, body).await
-    }
-}
-
-#[derive(Debug)]
-pub struct HttpRequest {
-    pub method: String,
-    pub url: String,
-    pub headers: HashMap<String, String>,
-    pub body: Vec<u8>,
-}
-
-#[derive(Debug)]
-pub struct HttpResponse {
-    pub status_code: u16,
-    pub headers: HashMap<String, String>,
-    pub body: Vec<u8>,
-}
-
+/// HTTP protocol handler implementation
 pub struct HttpProtocol {
-    endpoint: String,
-    status: ConnectionStatus,
-    http_client: Option<Box<dyn HttpClient>>,
-    response_buffer: Vec<u8>,
-    response_pos: usize,
+    client: Box<dyn HttpClient>,
+    url: Option<String>,
 }
 
 impl HttpProtocol {
-    pub fn new(client_provider: &dyn HttpClientProvider) -> Self {
+    pub fn new(client_provider: Arc<dyn HttpClientProvider>) -> Self {
         Self {
-            endpoint: String::new(),
-            status: ConnectionStatus::Disconnected,
-            http_client: Some(client_provider.create_http_client()),
-            response_buffer: Vec::new(),
-            response_pos: 0,
+            client: client_provider.create_http_client(),
+            url: None,
         }
     }
 
-    pub fn new_without_client() -> Self {
-        Self {
-            endpoint: String::new(),
-            status: ConnectionStatus::Disconnected,
-            http_client: None,
-            response_buffer: Vec::new(),
-            response_pos: 0,
+    /// Send an HTTP request
+    pub async fn send_request(&mut self, method: &str, url: &str, body: &[u8]) -> DeviceResult<Vec<u8>> {
+        match method.to_uppercase().as_str() {
+            "GET" => self.client.get(url).await,
+            "POST" => self.client.post(url, body).await,
+            "PUT" => self.client.put(url, body).await,
+            "DELETE" => self.client.delete(url).await,
+            "HEAD" => self.client.head(url).await,
+            "PATCH" => self.client.patch(url, body).await,
+            _ => Err(DeviceError::InvalidOperation),
         }
     }
 
-    pub fn set_http_client(&mut self, client: Box<dyn HttpClient>) {
-        self.http_client = Some(client);
-    }
-}
-
-impl Clone for HttpProtocol {
-    fn clone(&self) -> Self {
-        Self {
-            endpoint: self.endpoint.clone(),
-            status: self.status.clone(),
-            http_client: None, // Don't clone the client
-            response_buffer: Vec::new(),
-            response_pos: 0,
-        }
-    }
-}
-
-#[async_trait]
-impl HttpProtocolHandler for HttpProtocol {
-    async fn send_request(&mut self, method: &str, url: &str, body: &[u8]) -> DeviceResult<()> {
-        if let Some(client) = &mut self.http_client {
-            match method.to_uppercase().as_str() {
-                "GET" => { client.get(url).await?; }
-                "POST" => { client.post(url, body).await?; }
-                "PUT" => { client.put(url, body).await?; }
-                "DELETE" => { client.delete(url).await?; }
-                "HEAD" => { client.head(url).await?; }
-                "PATCH" => { client.patch(url, body).await?; }
-                _ => return Err(DeviceError::InvalidOperation),
-            };
-            Ok(())
-        } else {
-            Err(DeviceError::NotReady)
-        }
+    /// Perform HTTP GET request
+    pub async fn get(&mut self, url: &str) -> DeviceResult<Vec<u8>> {
+        self.send_request("GET", url, &[]).await
     }
 
-    async fn add_header(&mut self, key: &str, value: &str) -> DeviceResult<()> {
-        if let Some(client) = &mut self.http_client {
-            client.set_header(key, value);
-            Ok(())
-        } else {
-            Err(DeviceError::NotReady)
-        }
+    /// Perform HTTP POST request
+    pub async fn post(&mut self, url: &str, body: &[u8]) -> DeviceResult<Vec<u8>> {
+        self.send_request("POST", url, body).await
     }
 
-    async fn get_status_code(&self) -> DeviceResult<u16> {
-        if let Some(client) = &self.http_client {
-            Ok(client.get_status_code())
-        } else {
-            Err(DeviceError::NotReady)
-        }
+    /// Perform HTTP PUT request
+    pub async fn put(&mut self, url: &str, body: &[u8]) -> DeviceResult<Vec<u8>> {
+        self.send_request("PUT", url, body).await
     }
 
-    async fn get_headers(&self) -> DeviceResult<HashMap<String, String>> {
-        if let Some(client) = &self.http_client {
-            Ok(client.get_headers())
-        } else {
-            Err(DeviceError::NotReady)
-        }
+    /// Perform HTTP DELETE request
+    pub async fn delete(&mut self, url: &str) -> DeviceResult<Vec<u8>> {
+        self.send_request("DELETE", url, &[]).await
+    }
+
+    /// Perform HTTP HEAD request
+    pub async fn head(&mut self, url: &str) -> DeviceResult<Vec<u8>> {
+        self.send_request("HEAD", url, &[]).await
+    }
+
+    /// Perform HTTP PATCH request
+    pub async fn patch(&mut self, url: &str, body: &[u8]) -> DeviceResult<Vec<u8>> {
+        self.send_request("PATCH", url, body).await
+    }
+
+    /// Set a header for subsequent requests
+    pub fn set_header(&mut self, key: &str, value: &str) {
+        self.client.set_header(key, value);
+    }
+
+    /// Get current status code from last request
+    pub fn status_code(&self) -> u16 {
+        self.client.status_code()
+    }
+
+    /// Get all current headers
+    pub fn headers(&self) -> HashMap<String, String> {
+        self.client.headers()
+    }
+
+    /// Get the base URL for this connection
+    pub fn url(&self) -> Option<&str> {
+        self.url.as_deref()
     }
 }
 
 #[async_trait]
 impl ProtocolHandler for HttpProtocol {
-    fn as_any(&self) -> &dyn std::any::Any {
+    fn as_any(&self) -> &dyn Any {
         self
     }
 
-    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+    fn as_any_mut(&mut self) -> &mut dyn Any {
         self
     }
 
-    async fn open(&mut self, endpoint: &str) -> DeviceResult<()> {
-        self.endpoint = endpoint.to_string();
-        self.status = ConnectionStatus::Connecting;
-        
-        if let Some(client) = &mut self.http_client {
-            client.connect(endpoint).await?;
-            self.status = ConnectionStatus::Connected;
-            Ok(())
-        } else {
-            Err(DeviceError::NotReady)
-        }
+    async fn open(&mut self, url: &str) -> DeviceResult<()> {
+        self.url = Some(url.to_string());
+        self.client.connect(url).await
     }
 
     async fn close(&mut self) -> DeviceResult<()> {
-        if self.status == ConnectionStatus::Disconnected {
-            return Err(DeviceError::NotReady);
+        let result = self.client.disconnect().await;
+        if result.is_ok() {
+            self.url = None;
         }
-        
-        if let Some(client) = &mut self.http_client {
-            client.disconnect().await?;
-            self.status = ConnectionStatus::Disconnected;
-            Ok(())
-        } else {
-            Err(DeviceError::NotReady)
-        }
+        result
     }
 
-    async fn write(&mut self, buf: &[u8]) -> DeviceResult<usize> {
-        if self.status != ConnectionStatus::Connected {
-            return Err(DeviceError::NotReady);
-        }
-
-        if let Some(client) = &mut self.http_client {
-            // For protocol-agnostic usage, treat writes as POST requests
-            let response = client.post(&self.endpoint, buf).await?;
-            self.response_buffer = response;
-            self.response_pos = 0;
-            Ok(buf.len())
-        } else {
-            Err(DeviceError::NotReady)
-        }
+    async fn read(&mut self, _buf: &mut [u8]) -> DeviceResult<usize> {
+        Err(DeviceError::NotSupported)
     }
 
-    async fn read(&mut self, buf: &mut [u8]) -> DeviceResult<usize> {
-        if self.status != ConnectionStatus::Connected {
-            return Err(DeviceError::NotReady);
-        }
-
-        if let Some(client) = &mut self.http_client {
-            // If no response data available, do a GET request
-            if self.response_buffer.is_empty() {
-                let response = client.get(&self.endpoint).await?;
-                self.response_buffer = response;
-                self.response_pos = 0;
-            }
-
-            // Read from response buffer
-            if self.response_pos >= self.response_buffer.len() {
-                return Ok(0); // EOF
-            }
-
-            let remaining = self.response_buffer.len() - self.response_pos;
-            let to_read = std::cmp::min(remaining, buf.len());
-            
-            buf[..to_read].copy_from_slice(&self.response_buffer[self.response_pos..self.response_pos + to_read]);
-            self.response_pos += to_read;
-            
-            Ok(to_read)
-        } else {
-            Err(DeviceError::NotReady)
-        }
+    async fn write(&mut self, _buf: &[u8]) -> DeviceResult<usize> {
+        Err(DeviceError::NotSupported)
     }
 
     async fn status(&self) -> DeviceResult<ConnectionStatus> {
-        Ok(self.status.clone())
+        Ok(if self.url.is_some() {
+            ConnectionStatus::Connected
+        } else {
+            ConnectionStatus::Disconnected
+        })
     }
 
     async fn available(&self) -> DeviceResult<usize> {
@@ -244,204 +130,266 @@ impl ProtocolHandler for HttpProtocol {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::device::DeviceError;
-    use crate::device::network::protocols::HttpClient;
-    use std::collections::HashMap;
     use std::sync::{Arc, Mutex};
 
-    // Mock HTTP client for testing
-    #[derive(Clone)]
+    #[derive(Clone, Default, Debug, PartialEq)]
+    struct RequestRecord {
+        method: String,
+        url: String,
+        body: Vec<u8>,
+    }
+
     struct TestHttpClient {
-        state: Arc<Mutex<TestHttpClientState>>,
-    }
-
-    #[derive(Default)]
-    struct TestHttpClientState {
-        last_method: String,
-        last_url: String,
-        last_body: Vec<u8>,
         headers: HashMap<String, String>,
-        response_data: Vec<u8>,
+        recorded_requests: Arc<Mutex<Vec<RequestRecord>>>,
         is_connected: bool,
-    }
-
-    #[async_trait]
-    impl HttpClient for TestHttpClient {
-        async fn connect(&mut self, url: &str) -> DeviceResult<()> {
-            let mut state = self.state.lock().unwrap();
-            state.is_connected = true;
-            state.last_url = url.to_string();
-            Ok(())
-        }
-
-        async fn disconnect(&mut self) -> DeviceResult<()> {
-            let mut state = self.state.lock().unwrap();
-            state.is_connected = false;
-            Ok(())
-        }
-
-        async fn get(&mut self, url: &str) -> DeviceResult<Vec<u8>> {
-            let mut state = self.state.lock().unwrap();
-            state.last_method = "GET".to_string();
-            state.last_url = url.to_string();
-            Ok(state.response_data.clone())
-        }
-
-        async fn post(&mut self, url: &str, body: &[u8]) -> DeviceResult<Vec<u8>> {
-            let mut state = self.state.lock().unwrap();
-            state.last_method = "POST".to_string();
-            state.last_url = url.to_string();
-            state.last_body = body.to_vec();
-            Ok(state.response_data.clone())
-        }
-
-        async fn put(&mut self, url: &str, body: &[u8]) -> DeviceResult<Vec<u8>> {
-            let mut state = self.state.lock().unwrap();
-            state.last_method = "PUT".to_string();
-            state.last_url = url.to_string();
-            state.last_body = body.to_vec();
-            Ok(state.response_data.clone())
-        }
-
-        async fn delete(&mut self, url: &str) -> DeviceResult<Vec<u8>> {
-            let mut state = self.state.lock().unwrap();
-            state.last_method = "DELETE".to_string();
-            state.last_url = url.to_string();
-            Ok(state.response_data.clone())
-        }
-
-        async fn head(&mut self, url: &str) -> DeviceResult<Vec<u8>> {
-            let mut state = self.state.lock().unwrap();
-            state.last_method = "HEAD".to_string();
-            state.last_url = url.to_string();
-            Ok(Vec::new())  // HEAD returns empty body
-        }
-
-        async fn patch(&mut self, url: &str, body: &[u8]) -> DeviceResult<Vec<u8>> {
-            let mut state = self.state.lock().unwrap();
-            state.last_method = "PATCH".to_string();
-            state.last_url = url.to_string();
-            state.last_body = body.to_vec();
-            Ok(state.response_data.clone())
-        }
-
-        fn set_header(&mut self, key: &str, value: &str) {
-            let mut state = self.state.lock().unwrap();
-            state.headers.insert(key.to_string(), value.to_string());
-        }
-
-        fn get_headers(&self) -> HashMap<String, String> {
-            self.state.lock().unwrap().headers.clone()
-        }
-
-        fn get_status_code(&self) -> u16 { 200 }
-        fn get_network_unit(&self) -> u8 { 1 }
+        endpoint: String,
     }
 
     impl Default for TestHttpClient {
         fn default() -> Self {
             Self {
-                state: Arc::new(Mutex::new(TestHttpClientState::default())),
+                headers: HashMap::new(),
+                recorded_requests: Arc::new(Mutex::new(Vec::new())),
+                is_connected: false,
+                endpoint: String::new(),
             }
         }
     }
 
-    // Helper methods for test verification
-    impl TestHttpClient {
-        fn get_last_request(&self) -> Option<(String, String, Vec<u8>)> {
-            let state = self.state.lock().unwrap();
-            if state.last_method.is_empty() {
-                None
-            } else {
-                Some((
-                    state.last_method.clone(),
-                    state.last_url.clone(),
-                    state.last_body.clone(),
-                ))
+    impl Clone for TestHttpClient {
+        fn clone(&self) -> Self {
+            Self {
+                headers: self.headers.clone(),
+                recorded_requests: self.recorded_requests.clone(),
+                is_connected: self.is_connected,
+                endpoint: self.endpoint.clone(),
             }
         }
+    }
 
-        fn set_response_data(&self, data: &[u8]) {
-            let mut state = self.state.lock().unwrap();
-            state.response_data = data.to_vec();
+    #[async_trait]
+    impl HttpClient for TestHttpClient {
+        async fn connect(&mut self, url: &str) -> DeviceResult<()> {
+            self.endpoint = url.to_string();
+            self.is_connected = true;
+            Ok(())
         }
 
-        fn is_connected(&self) -> bool {
-            self.state.lock().unwrap().is_connected
+        async fn disconnect(&mut self) -> DeviceResult<()> {
+            self.is_connected = false;
+            self.endpoint.clear();
+            Ok(())
+        }
+
+        async fn get(&mut self, url: &str) -> DeviceResult<Vec<u8>> {
+            if !self.is_connected {
+                return Err(DeviceError::NotReady);
+            }
+            self.recorded_requests.lock().unwrap().push(RequestRecord {
+                method: "GET".to_string(),
+                url: url.to_string(),
+                body: Vec::new(),
+            });
+            Ok(b"test response".to_vec())
+        }
+
+        async fn post(&mut self, url: &str, body: &[u8]) -> DeviceResult<Vec<u8>> {
+            if !self.is_connected {
+                return Err(DeviceError::NotReady);
+            }
+            self.recorded_requests.lock().unwrap().push(RequestRecord {
+                method: "POST".to_string(),
+                url: url.to_string(),
+                body: body.to_vec(),
+            });
+            Ok(b"test response".to_vec())
+        }
+
+        async fn put(&mut self, url: &str, body: &[u8]) -> DeviceResult<Vec<u8>> {
+            if !self.is_connected {
+                return Err(DeviceError::NotReady);
+            }
+            self.recorded_requests.lock().unwrap().push(RequestRecord {
+                method: "PUT".to_string(),
+                url: url.to_string(),
+                body: body.to_vec(),
+            });
+            Ok(b"test response".to_vec())
+        }
+
+        async fn delete(&mut self, url: &str) -> DeviceResult<Vec<u8>> {
+            if !self.is_connected {
+                return Err(DeviceError::NotReady);
+            }
+            self.recorded_requests.lock().unwrap().push(RequestRecord {
+                method: "DELETE".to_string(),
+                url: url.to_string(),
+                body: Vec::new(),
+            });
+            Ok(Vec::new())
+        }
+
+        async fn head(&mut self, url: &str) -> DeviceResult<Vec<u8>> {
+            if !self.is_connected {
+                return Err(DeviceError::NotReady);
+            }
+            self.recorded_requests.lock().unwrap().push(RequestRecord {
+                method: "HEAD".to_string(),
+                url: url.to_string(),
+                body: Vec::new(),
+            });
+            Ok(Vec::new())
+        }
+
+        async fn patch(&mut self, url: &str, body: &[u8]) -> DeviceResult<Vec<u8>> {
+            if !self.is_connected {
+                return Err(DeviceError::NotReady);
+            }
+            self.recorded_requests.lock().unwrap().push(RequestRecord {
+                method: "PATCH".to_string(),
+                url: url.to_string(),
+                body: body.to_vec(),
+            });
+            Ok(b"test response".to_vec())
+        }
+
+        fn set_header(&mut self, key: &str, value: &str) {
+            self.headers.insert(key.to_string(), value.to_string());
+        }
+
+        fn status_code(&self) -> u16 {
+            200
+        }
+
+        fn headers(&self) -> HashMap<String, String> {
+            self.headers.clone()
+        }
+    }
+
+    #[derive(Default)]
+    struct TestHttpClientProvider {
+        client: TestHttpClient,
+    }
+
+    impl HttpClientProvider for TestHttpClientProvider {
+        fn create_http_client(&self) -> Box<dyn HttpClient> {
+            Box::new(self.client.clone())
         }
     }
 
     #[tokio::test]
     async fn test_protocol_lifecycle() {
-        let mut protocol = HttpProtocol::new_without_client();
+        let provider = Arc::new(TestHttpClientProvider::default());
+        let mut protocol = HttpProtocol::new(provider);
+
+        // Test initial state
         assert_eq!(protocol.status().await.unwrap(), ConnectionStatus::Disconnected);
-        
-        // Test operations without client should fail
-        assert!(matches!(protocol.open("test").await, Err(DeviceError::NotReady)));
-        assert!(matches!(protocol.close().await, Err(DeviceError::NotReady)));
-        assert!(matches!(protocol.read(&mut [0; 10]).await, Err(DeviceError::NotReady)));
-        assert!(matches!(protocol.write(&[0; 10]).await, Err(DeviceError::NotReady)));
 
-        // Set client and test connection lifecycle
-        let client = TestHttpClient::default();
-        protocol.set_http_client(Box::new(client.clone()));
-        
+        // Test connection
         protocol.open("http://test.com").await.unwrap();
-        assert!(client.is_connected());
-        
+        assert_eq!(protocol.status().await.unwrap(), ConnectionStatus::Connected);
+
+        // Test disconnection
         protocol.close().await.unwrap();
-        assert!(!client.is_connected());
+        assert_eq!(protocol.status().await.unwrap(), ConnectionStatus::Disconnected);
     }
 
     #[tokio::test]
-    async fn test_protocol_io() -> DeviceResult<()> {
-        let mut protocol = HttpProtocol::new_without_client();
-        let client = TestHttpClient::default();
-        protocol.set_http_client(Box::new(client.clone()));
+    async fn test_http_operations() {
+        let provider = Arc::new(TestHttpClientProvider::default());
+        let mut protocol = HttpProtocol::new(provider.clone());
 
-        // Setup test data
-        let test_url = "http://test.com";
-        client.set_response_data(b"test response");
-        protocol.open(test_url).await?;
+        // Connect first
+        protocol.open("http://test.com").await.unwrap();
 
-        // Test write (POST)
-        let test_data = b"test request";
-        protocol.write(test_data).await?;
-        let (method, url, body) = client.get_last_request().unwrap();
-        assert_eq!(method, "POST");
-        assert_eq!(url, test_url);
-        assert_eq!(body, test_data);
+        // Test GET request
+        let response = protocol.get("http://test.com/api").await.unwrap();
+        assert_eq!(response, b"test response");
 
-        // Test read (should trigger GET)
-        let mut buf = vec![0; 100];
-        let read = protocol.read(&mut buf).await?;
-        assert_eq!(&buf[..read], b"test response");
+        // Test POST request with body
+        let post_data = b"test data";
+        let response = protocol.post("http://test.com/api", post_data).await.unwrap();
+        assert_eq!(response, b"test response");
 
-        Ok(())
+        // Test PUT request with different body
+        let put_data = b"updated data";
+        let response = protocol.put("http://test.com/api", put_data).await.unwrap();
+        assert_eq!(response, b"test response");
+
+        // Test DELETE request
+        let response = protocol.delete("http://test.com/api").await.unwrap();
+        assert_eq!(response, Vec::<u8>::new());
+
+        // Test HEAD request
+        let response = protocol.head("http://test.com/api").await.unwrap();
+        assert_eq!(response, Vec::<u8>::new());
+
+        // Test PATCH request
+        let patch_data = b"patch data";
+        let response = protocol.patch("http://test.com/api", patch_data).await.unwrap();
+        assert_eq!(response, b"test response");
+
+        // Test headers
+        protocol.set_header("Content-Type", "application/json");
+        assert_eq!(protocol.headers().get("Content-Type").unwrap(), "application/json");
+
+        // Verify recorded requests
+        let client = provider.client.clone();
+        let recorded_requests = client.recorded_requests.lock().unwrap();
+        
+        let expected_requests = vec![
+            RequestRecord {
+                method: "GET".to_string(),
+                url: "http://test.com/api".to_string(),
+                body: Vec::new(),
+            },
+            RequestRecord {
+                method: "POST".to_string(),
+                url: "http://test.com/api".to_string(),
+                body: post_data.to_vec(),
+            },
+            RequestRecord {
+                method: "PUT".to_string(),
+                url: "http://test.com/api".to_string(),
+                body: put_data.to_vec(),
+            },
+            RequestRecord {
+                method: "DELETE".to_string(),
+                url: "http://test.com/api".to_string(),
+                body: Vec::new(),
+            },
+            RequestRecord {
+                method: "HEAD".to_string(),
+                url: "http://test.com/api".to_string(),
+                body: Vec::new(),
+            },
+            RequestRecord {
+                method: "PATCH".to_string(),
+                url: "http://test.com/api".to_string(),
+                body: patch_data.to_vec(),
+            },
+        ];
+
+        assert_eq!(*recorded_requests, expected_requests, "Recorded requests don't match expected requests");
     }
 
     #[tokio::test]
-    async fn test_protocol_headers() -> DeviceResult<()> {
-        let mut protocol = HttpProtocol::new_without_client();
-        let client = TestHttpClient::default();
-        protocol.set_http_client(Box::new(client.clone()));
-        protocol.open("http://test.com").await?;
+    async fn test_error_handling() {
+        let provider = Arc::new(TestHttpClientProvider::default());
+        let mut protocol = HttpProtocol::new(provider);
 
-        // Add headers
-        protocol.add_header("Content-Type", "application/json").await?;
-        protocol.add_header("Authorization", "Bearer token").await?;
+        // Test operations without connecting first
+        assert!(matches!(
+            protocol.get("http://test.com/api").await,
+            Err(DeviceError::NotReady)
+        ));
 
-        // Verify headers were set
-        let headers = protocol.get_headers().await?;
-        assert_eq!(headers.get("Content-Type").unwrap(), "application/json");
-        assert_eq!(headers.get("Authorization").unwrap(), "Bearer token");
-
-        // Verify headers are sent with request
-        protocol.get("http://test.com").await?;
-        let headers = client.get_headers();
-        assert_eq!(headers.get("Content-Type").unwrap(), "application/json");
-        assert_eq!(headers.get("Authorization").unwrap(), "Bearer token");
-
-        Ok(())
+        assert!(matches!(
+            protocol.post("http://test.com/api", b"test").await,
+            Err(DeviceError::NotReady)
+        ));
     }
 } 
+
+

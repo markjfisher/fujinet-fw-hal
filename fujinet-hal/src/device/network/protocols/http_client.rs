@@ -1,85 +1,103 @@
 use async_trait::async_trait;
 use crate::device::DeviceResult;
 use std::collections::HashMap;
-use crate::device::network::NetworkUrl;
 
-/// Base connection state that can be shared across implementations
-#[derive(Clone, Default)]
-pub struct HttpConnectionState {
-    pub url: String,
+/// HTTP connection state
+#[derive(Clone)]
+pub struct HttpState {
     pub headers: HashMap<String, String>,
     pub status_code: u16,
 }
 
+impl Default for HttpState {
+    fn default() -> Self {
+        Self {
+            headers: HashMap::new(),
+            status_code: 200, // Set default status code to 200 (OK)
+        }
+    }
+}
+
 /// Base HTTP client implementation that handles common functionality
 pub struct BaseHttpClient {
-    connections: HashMap<u8, HttpConnectionState>,
-    current_unit: u8,
+    state: HttpState,
 }
 
 impl Default for BaseHttpClient {
     fn default() -> Self {
         Self {
-            connections: HashMap::new(),
-            current_unit: 1, // Default to N1
+            state: HttpState::default(),
         }
     }
 }
 
 impl BaseHttpClient {
-    /// Parse network unit ID from URL and return cleaned URL
-    pub fn parse_network_url(&mut self, url: &str) -> DeviceResult<String> {
-        let parsed = NetworkUrl::parse(url)?;
-        self.current_unit = parsed.unit;
-        Ok(parsed.url)
+    /// Get current state
+    pub fn state(&self) -> &HttpState {
+        &self.state
     }
 
-    /// Get or create connection state for current network unit
-    pub fn get_connection_state(&mut self) -> &mut HttpConnectionState {
-        self.connections.entry(self.current_unit).or_insert_with(|| HttpConnectionState {
-            url: String::new(),
-            headers: HashMap::new(),
-            status_code: 200,
-        })
+    /// Get mutable state
+    pub fn state_mut(&mut self) -> &mut HttpState {
+        &mut self.state
     }
 
-    /// Get connection state for current network unit without creating if missing
-    pub fn get_current_state(&self) -> Option<&HttpConnectionState> {
-        self.connections.get(&self.current_unit)
+    /// Set a header for subsequent requests
+    pub fn set_header(&mut self, key: String, value: String) {
+        self.state.headers.insert(key, value);
     }
 
-    /// Remove connection state for current network unit
-    pub fn remove_current_connection(&mut self) {
-        self.connections.remove(&self.current_unit);
+    /// Get all current headers
+    pub fn headers(&self) -> &HashMap<String, String> {
+        &self.state.headers
     }
 
-    /// Get current network unit
-    pub fn get_network_unit(&self) -> u8 {
-        self.current_unit
+    /// Get current status code
+    pub fn status_code(&self) -> u16 {
+        self.state.status_code
     }
 
-    /// Update URL if changed
-    pub fn update_url_if_changed(&mut self, url: String) {
-        let state = self.get_connection_state();
-        state.url = url;
+    /// Update status code (typically after a request)
+    pub fn set_status_code(&mut self, code: u16) {
+        self.state.status_code = code;
     }
 }
 
 /// Platform-agnostic HTTP client interface
 #[async_trait]
 pub trait HttpClient: Send + Sync {
+    /// Connect to an endpoint
     async fn connect(&mut self, endpoint: &str) -> DeviceResult<()>;
+    
+    /// Disconnect from current endpoint
     async fn disconnect(&mut self) -> DeviceResult<()>;
+    
+    /// Perform HTTP GET request
     async fn get(&mut self, url: &str) -> DeviceResult<Vec<u8>>;
+    
+    /// Perform HTTP POST request
     async fn post(&mut self, url: &str, body: &[u8]) -> DeviceResult<Vec<u8>>;
+    
+    /// Perform HTTP PUT request
     async fn put(&mut self, url: &str, body: &[u8]) -> DeviceResult<Vec<u8>>;
+    
+    /// Perform HTTP DELETE request
     async fn delete(&mut self, url: &str) -> DeviceResult<Vec<u8>>;
+    
+    /// Perform HTTP HEAD request
     async fn head(&mut self, url: &str) -> DeviceResult<Vec<u8>>;
+    
+    /// Perform HTTP PATCH request
     async fn patch(&mut self, url: &str, body: &[u8]) -> DeviceResult<Vec<u8>>;
+    
+    /// Set a header for subsequent requests
     fn set_header(&mut self, key: &str, value: &str);
-    fn get_status_code(&self) -> u16;
-    fn get_headers(&self) -> HashMap<String, String>;
-    fn get_network_unit(&self) -> u8;
+    
+    /// Get current status code from last request
+    fn status_code(&self) -> u16;
+    
+    /// Get all current headers
+    fn headers(&self) -> HashMap<String, String>;
 }
 
 #[cfg(test)]
@@ -89,65 +107,38 @@ mod tests {
     #[test]
     fn test_default_state() {
         let client = BaseHttpClient::default();
-        assert_eq!(client.get_network_unit(), 1);
-        assert!(client.get_current_state().is_none());
+        assert_eq!(client.status_code(), 200);
+        assert!(client.headers().is_empty());
     }
 
     #[test]
-    fn test_parse_network_url_default() {
+    fn test_header_management() {
         let mut client = BaseHttpClient::default();
-        let result = client.parse_network_url("N:http://ficticious_example.madeup").unwrap();
-        assert_eq!(result, "http://ficticious_example.madeup");
-        assert_eq!(client.get_network_unit(), 1);
+        
+        // Set and verify headers
+        client.set_header("Content-Type".to_string(), "application/json".to_string());
+        client.set_header("Authorization".to_string(), "Bearer token".to_string());
+        
+        assert_eq!(client.headers().len(), 2);
+        assert_eq!(
+            client.headers().get("Content-Type").unwrap(),
+            "application/json"
+        );
+        assert_eq!(
+            client.headers().get("Authorization").unwrap(),
+            "Bearer token"
+        );
     }
 
     #[test]
-    fn test_parse_network_url_with_unit() {
+    fn test_status_code() {
         let mut client = BaseHttpClient::default();
-        let result = client.parse_network_url("N3:http://ficticious_example.madeup").unwrap();
-        assert_eq!(result, "http://ficticious_example.madeup");
-        assert_eq!(client.get_network_unit(), 3);
-    }
-
-    #[test]
-    fn test_connection_state_management() {
-        let mut client = BaseHttpClient::default();
+        assert_eq!(client.status_code(), 200); // Default
         
-        // Initially no state exists
-        assert!(client.get_current_state().is_none());
+        client.set_status_code(404);
+        assert_eq!(client.status_code(), 404);
         
-        // Get or create creates new state
-        let state = client.get_connection_state();
-        assert_eq!(state.url, "");
-        assert_eq!(state.status_code, 200);
-        assert!(state.headers.is_empty());
-        
-        // State now exists
-        assert!(client.get_current_state().is_some());
-        
-        // Remove state
-        client.remove_current_connection();
-        assert!(client.get_current_state().is_none());
-    }
-
-    #[test]
-    fn test_multiple_units() {
-        let mut client = BaseHttpClient::default();
-        
-        // Set up unit 1
-        client.parse_network_url("N1:http://example1.com").unwrap();
-        client.get_connection_state().url = "http://example1.com".to_string();
-        
-        // Set up unit 2
-        client.parse_network_url("N2:http://example2.com").unwrap();
-        client.get_connection_state().url = "http://example2.com".to_string();
-        
-        // Verify unit 1 state
-        client.parse_network_url("N1:anything").unwrap();
-        assert_eq!(client.get_connection_state().url, "http://example1.com");
-        
-        // Verify unit 2 state
-        client.parse_network_url("N2:anything").unwrap();
-        assert_eq!(client.get_connection_state().url, "http://example2.com");
+        client.set_status_code(500);
+        assert_eq!(client.status_code(), 500);
     }
 } 

@@ -14,7 +14,8 @@ struct HttpProtocolFactory {
 impl ProtocolHandlerFactory for HttpProtocolFactory {
     fn create_handler(&self) -> Box<dyn ProtocolHandler> {
         // Create HTTP protocol with our mock client
-        let protocol = HttpProtocol::new(&*self.provider);
+        // Clone the Arc to share ownership of the provider
+        let protocol = HttpProtocol::new(self.provider.clone());
         Box::new(protocol)
     }
 }

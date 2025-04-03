@@ -33,13 +33,6 @@ impl From<DeviceError> for FujiError {
     }
 }
 
-// Common error conversion function
-// pub(crate) fn device_result_to_error(result: crate::device::DeviceResult<()>) -> u8 {
-//     match result {
-//         Ok(_) => FN_ERR_OK,
-//         Err(e) => FujiError::from(e) as u8,
-//     }
-// }
 
 #[no_mangle]
 pub extern "C" fn fuji_device_open(device: *mut FujiDevice) -> FujiError {

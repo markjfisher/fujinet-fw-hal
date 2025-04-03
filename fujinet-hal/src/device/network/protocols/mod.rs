@@ -5,7 +5,7 @@ mod registry;
 mod http_client;
 mod factory;
 
-pub use http::{HttpProtocol, HttpProtocolHandler};
+pub use http::HttpProtocol;
 pub use protocol_handler::{ProtocolHandler, ConnectionStatus};
 pub use client_provider::HttpClientProvider;
 pub use registry::{ProtocolRegistry, ProtocolHandlerFactory, NetworkProtocol};

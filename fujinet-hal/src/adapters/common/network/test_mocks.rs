@@ -3,16 +3,28 @@ use crate::device::DeviceError;
 use crate::device::network::NetworkUrl;
 use crate::device::manager::DeviceState;
 use crate::device::network::NetworkDevice;
-use crate::device::network::protocols::{ProtocolHandler, HttpClient, HttpProtocol};
+use crate::device::network::protocols::{ProtocolHandler, HttpClient, HttpProtocol, HttpClientProvider};
 use crate::device::network::manager::NetworkManager;
 use crate::device::{Device, DeviceStatus};
 use async_trait::async_trait;
 use std::collections::HashMap;
 use std::any::Any;
+use std::sync::Arc;
 
 // Mock HTTP client for testing
+#[derive(Clone)]
 pub struct MockHttpClient {
     pub post_result: Result<(), DeviceError>,
+    headers: HashMap<String, String>,
+}
+
+impl Default for MockHttpClient {
+    fn default() -> Self {
+        Self {
+            post_result: Ok(()),
+            headers: HashMap::new(),
+        }
+    }
 }
 
 #[async_trait]
@@ -25,7 +37,8 @@ impl HttpClient for MockHttpClient {
         Ok(())
     }
 
-    fn set_header(&mut self, _key: &str, _value: &str) {
+    fn set_header(&mut self, key: &str, value: &str) {
+        self.headers.insert(key.to_string(), value.to_string());
     }
 
     async fn get(&mut self, _url: &str) -> DeviceResult<Vec<u8>> {
@@ -52,16 +65,12 @@ impl HttpClient for MockHttpClient {
         Ok(vec![])
     }
 
-    fn get_status_code(&self) -> u16 {
+    fn status_code(&self) -> u16 {
         200
     }
 
-    fn get_headers(&self) -> HashMap<String, String> {
-        HashMap::new()
-    }
-
-    fn get_network_unit(&self) -> u8 {
-        1 // Default test network unit
+    fn headers(&self) -> HashMap<String, String> {
+        self.headers.clone()
     }
 }
 
@@ -129,9 +138,10 @@ impl TestNetworkManager {
     }
 
     pub fn with_http_device(mut self, post_result: Result<(), DeviceError>) -> Self {
-        // Create a real HttpProtocol instance with a mock client for testing
-        let mut protocol = HttpProtocol::new_without_client();
-        protocol.set_http_client(Box::new(MockHttpClient { post_result }));
+        // Create a new HttpProtocol instance with a mock client for testing
+        let mock_client = MockHttpClient { post_result, headers: HashMap::new() };
+        let provider = Arc::new(MockHttpClientProvider::new(mock_client));
+        let protocol = HttpProtocol::new(provider);
         
         let device = Box::new(MockNetworkDevice { 
             protocol: Box::new(protocol)
@@ -215,5 +225,30 @@ impl NetworkDevice for MockNetworkDevice {
 
     fn protocol_handler(&mut self) -> &mut dyn ProtocolHandler {
         &mut *self.protocol
+    }
+}
+
+// Mock HTTP client provider for testing
+pub struct MockHttpClientProvider {
+    client: MockHttpClient,
+}
+
+impl MockHttpClientProvider {
+    pub fn new(client: MockHttpClient) -> Self {
+        Self { client }
+    }
+}
+
+impl Default for MockHttpClientProvider {
+    fn default() -> Self {
+        Self {
+            client: MockHttpClient::default(),
+        }
+    }
+}
+
+impl HttpClientProvider for MockHttpClientProvider {
+    fn create_http_client(&self) -> Box<dyn HttpClient> {
+        Box::new(self.client.clone())
     }
 } 

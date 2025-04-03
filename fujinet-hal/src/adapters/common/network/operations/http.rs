@@ -3,7 +3,7 @@ use crate::adapters::common::error::AdapterError;
 use tokio::runtime::Runtime;
 use super::{context::OperationsContext, types::HttpPostRequest};
 use crate::device::network::manager::NetworkManager;
-use crate::device::network::protocols::{http::HttpProtocol, HttpProtocolHandler};
+use crate::device::network::protocols::http::HttpProtocol;
 
 impl<M: NetworkManager> OperationsContext<M> {
     /// Perform an HTTP POST operation
