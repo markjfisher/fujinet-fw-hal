@@ -1,6 +1,7 @@
 use std::ffi::CStr;
 use std::os::raw::c_char;
-use std::sync::{Arc, OnceLock, Mutex};
+use std::sync::{Arc, OnceLock};
+use std::sync::atomic::{AtomicPtr, Ordering};
 use crate::adapters::common::network::operations::OperationsContext;
 use crate::adapters::common::network::{DeviceOpenRequest, HttpPostRequest};
 use crate::adapters::common::error::AdapterError;
@@ -33,14 +34,19 @@ static OPERATIONS: OnceLock<Arc<dyn NetworkOperations>> = OnceLock::new();
 
 // Test-specific global state
 #[cfg(test)]
-static TEST_OPERATIONS: OnceLock<Mutex<Option<Arc<dyn NetworkOperations>>>> = OnceLock::new();
+static TEST_OPERATIONS: AtomicPtr<Arc<dyn NetworkOperations>> = AtomicPtr::new(std::ptr::null_mut());
 
 // Get the appropriate operations context
 fn get_operations() -> Arc<dyn NetworkOperations> {
     #[cfg(test)]
     {
-        let test_ops = TEST_OPERATIONS.get_or_init(|| Mutex::new(None));
-        test_ops.lock().unwrap().as_ref().expect("Test operations not initialized").clone()
+        // Safety: We know this pointer is valid because:
+        // 1. Tests are serialized with #[serial]
+        // 2. We always set it before use in setup_test_context
+        // 3. The Arc ensures the data lives long enough
+        unsafe {
+            (*TEST_OPERATIONS.load(Ordering::SeqCst)).clone()
+        }
     }
     #[cfg(not(test))]
     {
@@ -117,16 +123,22 @@ pub extern "C" fn network_http_post(devicespec: *const c_char, data: *const c_ch
 mod tests {
     use super::*;
     use std::ffi::CString;
+    use serial_test::serial;
     use crate::adapters::{common::network::test_mocks::TestNetworkManager, ffi::FN_ERR_OK};
 
     fn setup_test_context(manager: TestNetworkManager) {
-        // Initialize test operations if not already initialized
-        let test_ops = TEST_OPERATIONS.get_or_init(|| Mutex::new(None));
-        // Set the new test context
-        *test_ops.lock().unwrap() = Some(Arc::new(OperationsContext::new(manager)));
+        // Create new Arc with explicit trait object
+        let ops: Arc<dyn NetworkOperations> = Arc::new(OperationsContext::new(manager));
+        // Box the Arc trait object
+        let ops = Box::new(ops);
+        // Get raw pointer to the Arc trait object
+        let ptr = Box::into_raw(ops);
+        // Store the pointer, replacing any previous value
+        TEST_OPERATIONS.store(ptr, Ordering::SeqCst);
     }
 
     #[test]
+    #[serial]
     fn test_network_init() {
         let manager = TestNetworkManager::new()
             .with_parse_result(1, "N1:http://test.com")
@@ -136,10 +148,11 @@ mod tests {
         assert_eq!(network_init(), FN_ERR_OK);
         
         // Verify operations context was initialized
-        assert!(TEST_OPERATIONS.get().unwrap().lock().unwrap().is_some());
+        assert!(!TEST_OPERATIONS.load(Ordering::SeqCst).is_null());
     }
 
     #[test]
+    #[serial]
     fn test_ffi_null_pointers() {
         let manager = TestNetworkManager::new();
         setup_test_context(manager);
@@ -156,6 +169,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_ffi_invalid_utf8() {
         let manager = TestNetworkManager::new();
         setup_test_context(manager);
@@ -170,6 +184,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_ffi_error_codes() {
         let manager = TestNetworkManager::new()
             .with_parse_result(1, "N1:http://test.com")
@@ -186,6 +201,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_network_manager_url_parsing() {
         let manager = TestNetworkManager::new()
             .with_parse_result(1, "N1:http://test.com");
