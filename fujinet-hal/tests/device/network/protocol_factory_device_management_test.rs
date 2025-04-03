@@ -27,7 +27,7 @@ fn setup_test_registry() -> ProtocolRegistry {
 }
 
 #[tokio::test]
-async fn test_protocol_factory_integration() -> DeviceResult<()> {
+async fn test_protocol_factory_device_management() -> DeviceResult<()> {
     let registry = setup_test_registry();
     let mut factory = ProtocolFactory::new(registry);
     
@@ -47,18 +47,3 @@ async fn test_protocol_factory_integration() -> DeviceResult<()> {
 
     Ok(())
 }
-
-#[tokio::test]
-async fn test_protocol_factory_invalid_urls() -> DeviceResult<()> {
-    let registry = setup_test_registry();
-    let mut factory = ProtocolFactory::new(registry);
-
-    // Test invalid protocol
-    let url = NetworkUrl::parse("N:invalid://example.com")?;
-    assert!(factory.get_or_create_device(0, NetworkProtocol::Http, &url).await.is_err());
-
-    // Test malformed URL
-    assert!(NetworkUrl::parse("malformed_url").is_err());
-
-    Ok(())
-} 

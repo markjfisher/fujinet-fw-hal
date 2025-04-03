@@ -1,6 +1,6 @@
 use crate::device::manager::{DeviceManager, DeviceState};
 use crate::device::network::NetworkUrl;
-use crate::device::network::protocols::{NetworkProtocol, ProtocolFactory, ProtocolRegistry};
+use crate::device::network::protocols::{ProtocolFactory, ProtocolRegistry};
 use crate::device::network::network_device::NetworkDevice;
 use crate::device::DeviceError;
 use crate::device::DeviceResult;
@@ -84,8 +84,7 @@ impl NetworkManager for NetworkManagerImpl {
         }
 
         // Create/get protocol handler and device
-        let protocol = NetworkProtocol::from_str(url.scheme()?).ok_or(DeviceError::UnsupportedProtocol)?;
-        self.protocol_factory.get_or_create_device(device_id, protocol, &url).await?;
+        self.protocol_factory.get_or_create_device(device_id, url.protocol(), &url).await?;
 
         // Get the newly created device and connect it
         if let Some(device) = self.protocol_factory.get_device(device_id) {

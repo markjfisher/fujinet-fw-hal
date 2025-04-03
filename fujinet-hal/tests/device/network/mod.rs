@@ -1,3 +1,2 @@
-mod protocol_factory_test;
-mod protocol_factory_integration_test;
+mod protocol_factory_device_management_test;
 mod protocol_registry_test;

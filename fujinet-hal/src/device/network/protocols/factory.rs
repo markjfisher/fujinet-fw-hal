@@ -36,9 +36,8 @@ impl ProtocolFactory {
             return Ok(device_id);
         }
 
-        // Validate that URL scheme matches protocol type
-        let url_protocol = NetworkProtocol::from_str(url.scheme()?).ok_or(DeviceError::UnsupportedProtocol)?;
-        if url_protocol != protocol {
+        // Validate that URL protocol matches requested protocol
+        if url.protocol() != protocol {
             return Err(DeviceError::InvalidProtocol);
         }
 
