@@ -1,7 +1,13 @@
 use std::ffi::CStr;
 use std::os::raw::c_char;
-use std::sync::{Arc, OnceLock};
+use std::sync::Arc;
+
+#[cfg(not(test))]
+use std::sync::OnceLock;
+
+#[cfg(test)]
 use std::sync::atomic::{AtomicPtr, Ordering};
+
 use crate::adapters::common::network::operations::OperationsContext;
 use crate::adapters::common::network::{DeviceOpenRequest, HttpPostRequest};
 use crate::adapters::common::error::AdapterError;
@@ -10,7 +16,11 @@ use crate::adapters::ffi::error::{
     adapter_result_to_ffi,
     FN_ERR_BAD_CMD,
 };
-use crate::device::network::manager::{NetworkManager, NetworkManagerImpl};
+use crate::device::network::manager::NetworkManager;
+
+#[cfg(not(test))]
+use crate::device::network::manager::NetworkManagerImpl;
+
 
 // Trait to abstract over different OperationsContext types
 trait NetworkOperations: Send + Sync {
@@ -29,6 +39,7 @@ impl<M: NetworkManager + Send + Sync + 'static> NetworkOperations for Operations
     }
 }
 
+#[cfg(not(test))]
 // Production global state
 static OPERATIONS: OnceLock<Arc<dyn NetworkOperations>> = OnceLock::new();
 
