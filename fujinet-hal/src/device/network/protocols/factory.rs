@@ -1,4 +1,5 @@
 use crate::device::DeviceResult;
+use crate::device::DeviceError;
 use crate::device::network::NetworkDevice;
 use crate::device::network::NetworkUrl;
 use crate::device::network::network_device::NetworkDeviceImpl;
@@ -33,6 +34,12 @@ impl ProtocolFactory {
         // If we already have an active device
         if self.active_devices[device_id].is_some() {
             return Ok(device_id);
+        }
+
+        // Validate that URL scheme matches protocol type
+        let url_protocol = NetworkProtocol::from_str(url.scheme()?).ok_or(DeviceError::UnsupportedProtocol)?;
+        if url_protocol != protocol {
+            return Err(DeviceError::InvalidProtocol);
         }
 
         // Create new device with protocol handler from registry
