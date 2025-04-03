@@ -1,9 +1,9 @@
-use super::NetworkProtocol;
-use super::registry::ProtocolRegistry;
-use crate::device::network::NetworkDevice;
 use crate::device::DeviceResult;
+use crate::device::network::NetworkDevice;
 use crate::device::network::NetworkUrl;
 use crate::device::network::network_device::NetworkDeviceImpl;
+use super::NetworkProtocol;
+use super::registry::ProtocolRegistry;
 
 /// Factory for creating and managing network devices
 /// Uses ProtocolRegistry to create appropriate protocol handlers
@@ -59,9 +59,11 @@ impl ProtocolFactory {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::device::network::protocols::registry::ProtocolHandlerFactory;
+    use crate::device::DeviceResult;
+    use crate::device::network::NetworkUrl;
     use crate::device::network::protocols::protocol_handler::{ProtocolHandler, ConnectionStatus};
+    use crate::device::network::protocols::NetworkProtocol;
+    use crate::device::network::protocols::registry::{ProtocolRegistry, ProtocolHandlerFactory};
     use async_trait::async_trait;
     use std::any::Any;
 
@@ -89,7 +91,7 @@ mod tests {
         }
     }
 
-    fn setup_test_registry() -> ProtocolRegistry {
+    fn setup_mock_registry() -> ProtocolRegistry {
         let mut registry = ProtocolRegistry::new();
         registry.register(NetworkProtocol::Http, Box::new(MockFactory));
         registry
@@ -97,8 +99,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_protocol_factory() -> DeviceResult<()> {
-        let registry = setup_test_registry();
-        let mut factory = ProtocolFactory::new(registry);
+        let registry = setup_mock_registry();
+        let mut factory = super::ProtocolFactory::new(registry);
         
         // Test device creation
         let url = NetworkUrl::parse("N:http://test.com")?;
@@ -117,8 +119,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_device_reuse() -> DeviceResult<()> {
-        let registry = setup_test_registry();
-        let mut factory = ProtocolFactory::new(registry);
+        let registry = setup_mock_registry();
+        let mut factory = super::ProtocolFactory::new(registry);
         
         let url = NetworkUrl::parse("N:http://test.com")?;
         
