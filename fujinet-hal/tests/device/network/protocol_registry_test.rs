@@ -170,7 +170,10 @@ async fn test_protocol_registry_with_mocks() -> DeviceResult<()> {
     let device = manager.get_network_device(0)
         .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "Device 0 not found"))?;
     
-    let http = device.as_any_mut()
+    // Get the protocol handler from the device
+    let protocol = device.protocol_handler();
+    
+    let http = protocol.as_any_mut()
         .downcast_mut::<MockHttpProtocol>()
         .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::Other, "Failed to downcast to HTTP protocol"))?;
     
@@ -180,13 +183,16 @@ async fn test_protocol_registry_with_mocks() -> DeviceResult<()> {
     http.write(b"POST data").await?;
 
     // Test TCP read - using device 1
-    manager.open_device("N:tcp://test-server:8080", 1, 1).await?;
+    manager.open_device("N2:tcp://test-server:8080", 1, 1).await?;
     
     // Verify device 1 is connected and is TCP protocol
     let device = manager.get_network_device(1)
         .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "Device 1 not found"))?;
     
-    let tcp = device.as_any_mut()
+    // Get the protocol handler from the device
+    let protocol = device.protocol_handler();
+    
+    let tcp = protocol.as_any_mut()
         .downcast_mut::<MockTcpProtocol>()
         .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::Other, "Failed to downcast to TCP protocol"))?;
     

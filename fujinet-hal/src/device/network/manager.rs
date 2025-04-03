@@ -75,16 +75,26 @@ impl NetworkManager for NetworkManagerImpl {
     async fn open_device(&mut self, spec: &str, mode: u8, trans: u8) -> DeviceResult<()> {
         let (device_id, url) = self.parse_device_spec(spec)?;
 
-        // First set device state
+        // Close any existing device at this ID
+        self.close_device(device_id).await?;
+
+        // Set device state
         if !self.device_manager.set_device_state(device_id, mode, trans, url.clone()) {
             return Err(DeviceError::InvalidDeviceId);
         }
 
-        // Then create/get protocol handler
+        // Create/get protocol handler and device
         let protocol = NetworkProtocol::from_str(url.scheme()?).ok_or(DeviceError::UnsupportedProtocol)?;
         self.protocol_factory.get_or_create_device(device_id, protocol, &url).await?;
 
-        Ok(())
+        // Get the newly created device and connect it
+        if let Some(device) = self.protocol_factory.get_device(device_id) {
+            // Connect using the URL from the spec
+            device.connect(&url.url).await?;
+            Ok(())
+        } else {
+            Err(DeviceError::NotReady)
+        }
     }
 
     async fn find_device(&mut self, spec: &str) -> DeviceResult<Option<(usize, &mut DeviceState)>> {
