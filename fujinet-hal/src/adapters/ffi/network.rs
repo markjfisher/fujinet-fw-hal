@@ -13,7 +13,7 @@ use std::sync::OnceLock;
 use std::sync::atomic::{AtomicPtr, Ordering};
 
 use crate::adapters::common::network::operations::OperationsContext;
-use crate::adapters::common::network::{DeviceOpenRequest, HttpPostRequest};
+use crate::adapters::common::network::operations::types::{DeviceOpenRequest, HttpPostRequest, HttpGetRequest};
 use crate::adapters::common::error::AdapterError;
 use crate::adapters::ffi::error::{
     device_result_to_error,
@@ -27,6 +27,7 @@ use crate::device::network::manager::NetworkManager;
 trait NetworkOperations: Send + Sync {
     fn open_device(&self, request: DeviceOpenRequest) -> Result<usize, AdapterError>;
     fn http_post(&self, request: HttpPostRequest) -> Result<(), AdapterError>;
+    fn http_get(&self, request: &mut HttpGetRequest) -> Result<usize, AdapterError>;
 }
 
 // Implement NetworkOperations for any OperationsContext with a NetworkManager
@@ -37,6 +38,10 @@ impl<M: NetworkManager + Send + Sync + 'static> NetworkOperations for Operations
 
     fn http_post(&self, request: HttpPostRequest) -> Result<(), AdapterError> {
         self.http_post(request)
+    }
+
+    fn http_get(&self, request: &mut HttpGetRequest) -> Result<usize, AdapterError> {
+        self.http_get(request)
     }
 }
 
@@ -179,12 +184,55 @@ pub extern "C" fn network_http_post(devicespec: *const c_char, data: *const c_ch
     adapter_result_to_ffi(ops.http_post(request))
 }
 
+#[no_mangle]
+pub extern "C" fn network_http_get(devicespec: *const c_char, buf: *mut u8, len: u16) -> i16 {
+    // Get operations context first
+    let Some(ops) = get_operations() else {
+        return -(FN_ERR_NOT_INITIALIZED as i16)
+    };
+
+    // Validate pointers
+    if devicespec.is_null() || buf.is_null() {
+        return -(FN_ERR_BAD_CMD as i16)
+    }
+
+    // Convert C string to Rust string
+    let device_spec = unsafe {
+        match CStr::from_ptr(devicespec).to_str() {
+            Ok(d) => d.to_string(),
+            _ => return -(FN_ERR_BAD_CMD as i16)
+        }
+    };
+
+    // Create a buffer to store the response
+    let buffer = vec![0u8; len as usize];
+
+    // Create the request
+    let mut request = HttpGetRequest {
+        device_spec,
+        buffer,
+    };
+
+    // Perform HTTP GET
+    match ops.http_get(&mut request) {
+        Ok(bytes_read) => {
+            // Copy the response data back to the provided buffer
+            unsafe {
+                std::ptr::copy_nonoverlapping(request.buffer.as_ptr(), buf, bytes_read);
+            }
+            bytes_read as i16
+        },
+        Err(e) => -(adapter_result_to_ffi::<()>(Err(e)) as i16)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::ffi::CString;
     use serial_test::serial;
     use crate::adapters::{common::network::test_mocks::TestNetworkManager, ffi::FN_ERR_OK};
+    use crate::device::DeviceError;
 
     fn setup_test_context(manager: TestNetworkManager) {
         // Create a runtime for async operations
@@ -286,5 +334,74 @@ mod tests {
                 description
             );
         }
+    }
+
+    #[test]
+    #[serial]
+    fn test_http_get_null_pointers() {
+        let manager = TestNetworkManager::new();
+        setup_test_context(manager);
+
+        // Test null devicespec
+        let mut buffer = [0u8; 1024];
+        assert_eq!(network_http_get(std::ptr::null(), buffer.as_mut_ptr(), 1024), -(FN_ERR_BAD_CMD as i16));
+
+        // Test null buffer
+        let url = CString::new("N1:http://test.com").unwrap();
+        assert_eq!(network_http_get(url.as_ptr(), std::ptr::null_mut(), 1024), -(FN_ERR_BAD_CMD as i16));
+    }
+
+    #[test]
+    #[serial]
+    fn test_http_get_invalid_utf8() {
+        let manager = TestNetworkManager::new();
+        setup_test_context(manager);
+
+        let mut buffer = [0u8; 1024];
+        let invalid_utf8 = unsafe { CString::from_vec_unchecked(vec![0xFF, 0xFE, 0x00]) };
+        assert_eq!(network_http_get(invalid_utf8.as_ptr(), buffer.as_mut_ptr(), 1024), -(FN_ERR_BAD_CMD as i16));
+    }
+
+    #[test]
+    #[serial]
+    fn test_http_get_success() {
+        let test_response = b"Hello, World!".to_vec();
+        let manager = TestNetworkManager::new()
+            .with_parse_result(1, "N1:http://test.com")
+            .with_http_device_get(Ok(test_response.clone()));
+        setup_test_context(manager);
+
+        let url = CString::new("N1:http://test.com").unwrap();
+        let mut buffer = [0u8; 1024];
+        let result = network_http_get(url.as_ptr(), buffer.as_mut_ptr(), 1024);
+        assert!(result > 0);
+        assert_eq!(result as usize, test_response.len());
+    }
+
+    #[test]
+    #[serial]
+    fn test_http_get_network_error() {
+        let manager = TestNetworkManager::new()
+            .with_parse_result(1, "N1:http://test.com")
+            .with_http_device_get(Err(DeviceError::NetworkError("test error".to_string())));
+        setup_test_context(manager);
+
+        let url = CString::new("N1:http://test.com").unwrap();
+        let mut buffer = [0u8; 1024];
+        let result = network_http_get(url.as_ptr(), buffer.as_mut_ptr(), 1024);
+        assert!(result < 0);
+    }
+
+    #[test]
+    #[serial]
+    fn test_http_get_device_not_found() {
+        let manager = TestNetworkManager::new()
+            .with_parse_result(1, "N1:http://test.com");
+        setup_test_context(manager);
+
+        let url = CString::new("N1:http://test.com").unwrap();
+        let mut buffer = [0u8; 1024];
+        let result = network_http_get(url.as_ptr(), buffer.as_mut_ptr(), 1024);
+        assert!(result < 0);
     }
 }

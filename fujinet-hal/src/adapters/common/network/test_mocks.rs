@@ -15,6 +15,7 @@ use std::sync::Arc;
 #[derive(Clone)]
 pub struct MockHttpClient {
     pub post_result: Result<(), DeviceError>,
+    pub get_result: Result<Vec<u8>, DeviceError>,
     headers: HashMap<String, String>,
 }
 
@@ -22,6 +23,7 @@ impl Default for MockHttpClient {
     fn default() -> Self {
         Self {
             post_result: Ok(()),
+            get_result: Ok(vec![]),
             headers: HashMap::new(),
         }
     }
@@ -42,7 +44,7 @@ impl HttpClient for MockHttpClient {
     }
 
     async fn get(&mut self, _url: &str) -> DeviceResult<Vec<u8>> {
-        Ok(vec![])
+        self.get_result.clone()
     }
 
     async fn post(&mut self, _url: &str, _body: &[u8]) -> DeviceResult<Vec<u8>> {
@@ -138,13 +140,28 @@ impl TestNetworkManager {
     }
 
     pub fn with_http_device(mut self, post_result: Result<(), DeviceError>) -> Self {
-        // Create a new HttpProtocol instance with a mock client for testing
-        let mock_client = MockHttpClient { post_result, headers: HashMap::new() };
-        let provider = Arc::new(MockHttpClientProvider::new(mock_client));
+        let client = MockHttpClient {
+            post_result,
+            ..Default::default()
+        };
+        let provider = Arc::new(MockHttpClientProvider::new(client));
         let protocol = HttpProtocol::new(provider);
-        
-        let device = Box::new(MockNetworkDevice { 
-            protocol: Box::new(protocol)
+        let device = Box::new(MockNetworkDevice {
+            protocol: Box::new(protocol),
+        });
+        self.device = Some(device);
+        self
+    }
+
+    pub fn with_http_device_get(mut self, get_result: Result<Vec<u8>, DeviceError>) -> Self {
+        let client = MockHttpClient {
+            get_result,
+            ..Default::default()
+        };
+        let provider = Arc::new(MockHttpClientProvider::new(client));
+        let protocol = HttpProtocol::new(provider);
+        let device = Box::new(MockNetworkDevice {
+            protocol: Box::new(protocol),
         });
         self.device = Some(device);
         self
@@ -161,7 +178,7 @@ impl TestNetworkManager {
     }
 }
 
-// Mock network device for testing
+// Mock network device
 pub struct MockNetworkDevice {
     protocol: Box<dyn ProtocolHandler>,
 }
@@ -224,7 +241,7 @@ impl NetworkDevice for MockNetworkDevice {
     }
 
     fn protocol_handler(&mut self) -> &mut dyn ProtocolHandler {
-        &mut *self.protocol
+        self.protocol.as_mut()
     }
 }
 
@@ -236,14 +253,6 @@ pub struct MockHttpClientProvider {
 impl MockHttpClientProvider {
     pub fn new(client: MockHttpClient) -> Self {
         Self { client }
-    }
-}
-
-impl Default for MockHttpClientProvider {
-    fn default() -> Self {
-        Self {
-            client: MockHttpClient::default(),
-        }
     }
 }
 

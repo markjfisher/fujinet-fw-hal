@@ -16,4 +16,13 @@ pub struct HttpPostRequest {
     pub device_spec: String,
     /// The data to POST
     pub data: Vec<u8>,
+}
+
+/// Common request structure for HTTP GET operations
+#[derive(Debug)]
+pub struct HttpGetRequest {
+    /// The device specification string (e.g. "N1:http://ficticious_example.madeup")
+    pub device_spec: String,
+    /// The buffer to store the response
+    pub buffer: Vec<u8>,
 } 
