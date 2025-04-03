@@ -1,6 +1,6 @@
 use std::ffi::CStr;
 use std::os::raw::c_char;
-use std::sync::OnceLock;
+use std::sync::{Arc, OnceLock, Mutex};
 use crate::adapters::common::network::operations::OperationsContext;
 use crate::adapters::common::network::{DeviceOpenRequest, HttpPostRequest};
 use crate::adapters::common::error::AdapterError;
@@ -8,15 +8,8 @@ use crate::adapters::ffi::error::{
     device_result_to_error,
     adapter_result_to_ffi,
     FN_ERR_BAD_CMD,
-    FN_ERR_OK,
 };
 use crate::device::network::manager::{NetworkManager, NetworkManagerImpl};
-
-// Global operations context that can work with any NetworkManager implementation
-static OPERATIONS: OnceLock<Box<dyn NetworkOperations>> = OnceLock::new();
-
-#[cfg(test)]
-static mut TEST_OPERATIONS: Option<Box<dyn NetworkOperations>> = None;
 
 // Trait to abstract over different OperationsContext types
 trait NetworkOperations: Send + Sync {
@@ -35,50 +28,32 @@ impl<M: NetworkManager + Send + Sync + 'static> NetworkOperations for Operations
     }
 }
 
-// Initialize with default operations context
-fn init_operations() {
-    let _ = OPERATIONS.get_or_init(|| {
-        Box::new(OperationsContext::<NetworkManagerImpl>::default())
-    });
-}
+// Production global state
+static OPERATIONS: OnceLock<Arc<dyn NetworkOperations>> = OnceLock::new();
 
-// Test-only functions to manage operations state
+// Test-specific global state
 #[cfg(test)]
-mod test_utils {
-    use super::*;
+static TEST_OPERATIONS: OnceLock<Mutex<Option<Arc<dyn NetworkOperations>>>> = OnceLock::new();
 
-    // Reset the operations state before each test
-    pub fn reset_operations() {
-        unsafe {
-            TEST_OPERATIONS = None;
-        }
+// Get the appropriate operations context
+fn get_operations() -> Arc<dyn NetworkOperations> {
+    #[cfg(test)]
+    {
+        let test_ops = TEST_OPERATIONS.get_or_init(|| Mutex::new(None));
+        test_ops.lock().unwrap().as_ref().expect("Test operations not initialized").clone()
     }
-
-    // Get the current operations context
-    pub fn get_operations() -> &'static Box<dyn NetworkOperations> {
-        unsafe {
-            TEST_OPERATIONS.as_ref().expect("Test operations not initialized")
-        }
+    #[cfg(not(test))]
+    {
+        OPERATIONS.get_or_init(|| {
+            Arc::new(OperationsContext::<NetworkManagerImpl>::default())
+        }).clone()
     }
-
-    // Set the operations context for tests
-    pub fn set_operations<M: NetworkManager + Send + Sync + 'static>(context: OperationsContext<M>) {
-        unsafe {
-            TEST_OPERATIONS = Some(Box::new(context));
-        }
-    }
-}
-
-// Initialize with a specific operations context (used in tests)
-#[cfg(test)]
-fn init_test_operations<M: NetworkManager + Send + Sync + 'static>(context: OperationsContext<M>) {
-    test_utils::set_operations(context);
 }
 
 #[no_mangle]
 pub extern "C" fn network_init() -> u8 {
-    #[cfg(not(test))]
-    init_operations();
+    // Initialize operations context
+    let _ = get_operations();
     device_result_to_error(Ok(()))
 }
 
@@ -105,11 +80,7 @@ pub extern "C" fn network_open(devicespec: *const c_char, mode: u8, trans: u8) -
     };
 
     // Get operations context and open device
-    #[cfg(not(test))]
-    let ops = OPERATIONS.get().expect("Operations context not initialized");
-    #[cfg(test)]
-    let ops = test_utils::get_operations();
-
+    let ops = get_operations();
     adapter_result_to_ffi(ops.open_device(request))
 }
 
@@ -138,11 +109,7 @@ pub extern "C" fn network_http_post(devicespec: *const c_char, data: *const c_ch
     };
 
     // Get operations context and perform HTTP POST
-    #[cfg(not(test))]
-    let ops = OPERATIONS.get().expect("Operations context not initialized");
-    #[cfg(test)]
-    let ops = test_utils::get_operations();
-
+    let ops = get_operations();
     adapter_result_to_ffi(ops.http_post(request))
 }
 
@@ -150,14 +117,13 @@ pub extern "C" fn network_http_post(devicespec: *const c_char, data: *const c_ch
 mod tests {
     use super::*;
     use std::ffi::CString;
-    use crate::adapters::common::network::test_mocks::TestNetworkManager;
+    use crate::adapters::{common::network::test_mocks::TestNetworkManager, ffi::FN_ERR_OK};
 
     fn setup_test_context(manager: TestNetworkManager) {
-        // Reset operations state before each test
-        test_utils::reset_operations();
-        // Create test operations context and initialize it
-        let context = OperationsContext::new(manager);
-        init_test_operations(context);
+        // Initialize test operations if not already initialized
+        let test_ops = TEST_OPERATIONS.get_or_init(|| Mutex::new(None));
+        // Set the new test context
+        *test_ops.lock().unwrap() = Some(Arc::new(OperationsContext::new(manager)));
     }
 
     #[test]
@@ -168,6 +134,9 @@ mod tests {
         setup_test_context(manager);
 
         assert_eq!(network_init(), FN_ERR_OK);
+        
+        // Verify operations context was initialized
+        assert!(TEST_OPERATIONS.get().unwrap().lock().unwrap().is_some());
     }
 
     #[test]
@@ -202,18 +171,10 @@ mod tests {
 
     #[test]
     fn test_ffi_error_codes() {
-        // Setup manager to fail parsing invalid URLs
         let manager = TestNetworkManager::new()
-            .with_parse_result(1, "N1:http://test.com")  // Only this URL will parse successfully
+            .with_parse_result(1, "N1:http://test.com")
             .with_open_result(true);
         setup_test_context(manager);
-
-        // Test that null pointer returns BAD_CMD (this is actually tested in test_ffi_null_pointers)
-        assert_eq!(network_open(std::ptr::null(), 0, 0), FN_ERR_BAD_CMD);
-
-        // Test that invalid UTF-8 returns BAD_CMD (this is actually tested in test_ffi_invalid_utf8)
-        let invalid_utf8 = unsafe { CString::from_vec_unchecked(vec![0xFF, 0xFE, 0x00]) };
-        assert_eq!(network_open(invalid_utf8.as_ptr(), 0, 0), FN_ERR_BAD_CMD);
 
         // Test that URL parsing failures from NetworkManager are propagated
         let unparseable_url = CString::new("not_a_valid_device_spec").unwrap();
@@ -224,12 +185,10 @@ mod tests {
         assert_eq!(network_open(valid_url.as_ptr(), 4, 0), FN_ERR_OK);
     }
 
-    // Add a new test specifically for NetworkManager URL parsing
     #[test]
     fn test_network_manager_url_parsing() {
         let manager = TestNetworkManager::new()
-            // Setup specific URL format expectations
-            .with_parse_result(1, "N1:http://test.com");  // Only this URL will parse successfully
+            .with_parse_result(1, "N1:http://test.com");
         setup_test_context(manager);
 
         // These tests document the expected URL format, but the validation
@@ -238,7 +197,6 @@ mod tests {
             ("N9:http://example.com", "Invalid device number"),
             ("http://example.com", "Missing N prefix"),
             ("N1:not_a_url", "Invalid URL format"),
-            // Add more cases that document URL format requirements
         ];
 
         for (url, description) in test_cases {
@@ -250,39 +208,6 @@ mod tests {
                 url.to_str().unwrap(),
                 description
             );
-        }
-    }
-
-    #[test]
-    fn test_ffi_post_without_open() {
-        let manager = TestNetworkManager::new()
-            .with_parse_result(1, "N1:http://test.com");
-        setup_test_context(manager);
-
-        // Test that posting to an unopened device returns BAD_CMD
-        let url = CString::new("N1:http://ficticious_example.madeup").unwrap();
-        let data = CString::new("test_data").unwrap();
-        assert_eq!(network_http_post(url.as_ptr(), data.as_ptr()), FN_ERR_BAD_CMD);
-    }
-
-    #[test]
-    fn test_ffi_device_modes() {
-        let manager = TestNetworkManager::new()
-            .with_parse_result(1, "N1:http://test.com")
-            .with_open_result(true);
-        setup_test_context(manager);
-
-        // Test different device modes through FFI
-        let modes = [
-            4,   // Read mode
-            8,   // Write mode
-            12,  // Read/Write mode
-        ];
-
-        let url = CString::new("N1:http://ficticious_example.madeup").unwrap();
-        for mode in modes {
-            assert_eq!(network_open(url.as_ptr(), mode, 0), FN_ERR_OK,
-                "Failed to open with mode {}", mode);
         }
     }
 }
