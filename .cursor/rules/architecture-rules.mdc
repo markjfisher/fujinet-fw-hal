@@ -152,6 +152,10 @@ In order to work as an application, or a library, this project follows Hardware 
     - Protocol-specific URL validation
     - No ad-hoc URL parsing
 
+13. mod.rs Rules:
+    - mod.rs files should only be used for defining modules and re-exporting
+    - all trait/struct/impl definitions belong on files specifically named for the particular type.
+
 ## Testing Guidelines
 
 1. Test Organization:
