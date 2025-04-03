@@ -28,4 +28,4 @@ pub fn create_protocol_registry() -> ProtocolRegistry {
     registry.register(NetworkProtocol::Http, Box::new(HttpProtocolFactory { provider }));
     
     registry
-}
+} 

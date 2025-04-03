@@ -13,4 +13,4 @@ static NETWORK_MANAGER: Lazy<Mutex<NetworkManagerImpl>> = Lazy::new(|| {
 /// Get the global network manager instance
 pub fn get_network_manager() -> &'static Mutex<impl NetworkManager> {
     &NETWORK_MANAGER
-}
+} 

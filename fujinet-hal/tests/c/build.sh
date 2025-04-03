@@ -46,4 +46,4 @@ gcc -o http_test_debug http_test.c fujinet-network.c
 
 echo "Build complete. Run either:"
 echo "  Library version: ./http_test"
-echo "  Debug version: ./http_test_debug"
+echo "  Debug version: ./http_test_debug" 

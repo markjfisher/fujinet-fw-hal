@@ -37,6 +37,16 @@ char *create_url(char *method) {
     return (char *) url_buffer;
 }
 
+// void print_response() {
+//     int16_t bytes_read = network_http_get(url, response_buffer, sizeof(response_buffer));
+//     if (bytes_read < 0) {
+//         print_error("network_http_get", -bytes_read);
+//         return;
+//     }
+//     printf("HTTP GET successful, received %d bytes\n", bytes_read);
+//     printf("Response:\n%s\n", response_buffer);
+// }
+
 int main() {
     uint8_t result;
     int16_t bytes_read;
@@ -56,6 +66,13 @@ int main() {
         return 1;
     }
     printf("Network initialized successfully\n");
+
+    // After network_init() success:
+    printf("URL being passed: ");
+    for(int i = 0; i < strlen(httpbin); i++) {
+        printf("%02X ", (unsigned char)httpbin[i]);
+    }
+    printf("\n");
 
     // Open the network
     printf("Opening network...\n");
