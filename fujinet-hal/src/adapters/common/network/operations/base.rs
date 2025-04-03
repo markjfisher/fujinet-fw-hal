@@ -1,6 +1,5 @@
 use crate::device::DeviceError;
 use crate::adapters::common::error::AdapterError;
-use tokio::runtime::Runtime;
 use super::{context::OperationsContext, types::DeviceOpenRequest};
 use crate::device::network::manager::NetworkManager;
 
@@ -16,9 +15,8 @@ impl<M: NetworkManager> OperationsContext<M> {
         
         let (device_id, _url) = parse_result.map_err(|_| AdapterError::InvalidDeviceSpec)?;
 
-        // Create runtime and execute open_device
-        let rt = Runtime::new().unwrap();
-        let open_result = rt.block_on(manager.open_device(&request.device_spec, request.mode, request.translation));
+        // Execute open_device using stored runtime
+        let open_result = self.runtime.block_on(manager.open_device(&request.device_spec, request.mode, request.translation));
         println!("open_device result: {:?}", open_result);
         
         open_result.map_err(AdapterError::from)?;
@@ -28,9 +26,9 @@ impl<M: NetworkManager> OperationsContext<M> {
     /// Close a network device
     pub fn close_device(&self, device_id: usize) -> Result<(), AdapterError> {
         let mut manager = self.manager.lock().unwrap();
-        // Create runtime and execute close_device
-        let rt = Runtime::new().unwrap();
-        let closed = rt.block_on(manager.close_device(device_id))
+        
+        // Execute close_device using stored runtime
+        let closed = self.runtime.block_on(manager.close_device(device_id))
             .map_err(AdapterError::from)?;
 
         if !closed {

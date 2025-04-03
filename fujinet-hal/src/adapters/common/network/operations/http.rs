@@ -1,6 +1,5 @@
 use crate::device::DeviceError;
 use crate::adapters::common::error::AdapterError;
-use tokio::runtime::Runtime;
 use super::{context::OperationsContext, types::HttpPostRequest};
 use crate::device::network::manager::NetworkManager;
 use crate::device::network::protocols::http::HttpProtocol;
@@ -9,30 +8,31 @@ impl<M: NetworkManager> OperationsContext<M> {
     /// Perform an HTTP POST operation
     pub fn http_post(&self, request: HttpPostRequest) -> Result<(), AdapterError> {
         let mut manager = self.manager.lock().unwrap();
-        let rt = Runtime::new().unwrap();
         
-        // Parse device spec to get device ID and URL
-        let (device_id, url) = manager.parse_device_spec(&request.device_spec)
-            .map_err(|_| AdapterError::InvalidDeviceSpec)?;
+        // Parse and validate the device specification
+        let parse_result = manager.parse_device_spec(&request.device_spec);
+        let (device_id, url) = parse_result.map_err(|_| AdapterError::InvalidDeviceSpec)?;
 
-        // Get the device from protocol factory
-        let device = manager.get_network_device(device_id)
-            .ok_or(AdapterError::DeviceError(DeviceError::InvalidUrl))?;
+        // Execute HTTP POST using stored runtime
+        self.runtime.block_on(async {
+            if let Some(device) = manager.get_network_device(device_id) {
+                let protocol = device.protocol_handler();
+                
+                // Try to downcast to HttpProtocol
+                let http_protocol = protocol.as_any_mut()
+                    .downcast_mut::<HttpProtocol>()
+                    .ok_or(AdapterError::DeviceError(DeviceError::UnsupportedProtocol))?;
 
-        // Get the protocol handler and verify it implements HttpProtocolHandler
-        let protocol = device.protocol_handler();
-        
-        // Try to downcast to HttpProtocol first (production case)
-        let http_protocol = protocol.as_any_mut()
-            .downcast_mut::<HttpProtocol>()
-            .ok_or(AdapterError::DeviceError(DeviceError::UnsupportedProtocol))?;
-
-        // Execute POST request with raw URL
-        rt.block_on(http_protocol.post(&url.url, &request.data))
-            .map(|_| ())  // Discard the response data
-            .map_err(AdapterError::from)?;
-
-        Ok(())
+                // Execute POST request
+                http_protocol.post(&url.url, &request.data)
+                    .await
+                    .map(|_| ())  // Discard the response data
+                    .map_err(AdapterError::from)
+            } else {
+                // Return InvalidUrl error when device is not found
+                Err(AdapterError::DeviceError(DeviceError::InvalidUrl))
+            }
+        })
     }
 }
 

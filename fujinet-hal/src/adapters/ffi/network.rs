@@ -1,6 +1,10 @@
 use std::ffi::CStr;
 use std::os::raw::c_char;
 use std::sync::Arc;
+use tokio::runtime::Runtime;
+
+#[cfg(not(test))]
+use crate::platform::create_network_manager;
 
 #[cfg(not(test))]
 use std::sync::OnceLock;
@@ -15,12 +19,9 @@ use crate::adapters::ffi::error::{
     device_result_to_error,
     adapter_result_to_ffi,
     FN_ERR_BAD_CMD,
+    FN_ERR_NOT_INITIALIZED,
 };
 use crate::device::network::manager::NetworkManager;
-
-#[cfg(not(test))]
-use crate::device::network::manager::NetworkManagerImpl;
-
 
 // Trait to abstract over different OperationsContext types
 trait NetworkOperations: Send + Sync {
@@ -47,38 +48,70 @@ static OPERATIONS: OnceLock<Arc<dyn NetworkOperations>> = OnceLock::new();
 #[cfg(test)]
 static TEST_OPERATIONS: AtomicPtr<Arc<dyn NetworkOperations>> = AtomicPtr::new(std::ptr::null_mut());
 
+/// Initialize the FFI layer with the default platform-specific NetworkManager
+#[no_mangle]
+pub extern "C" fn network_init() -> u8 {
+    println!("network_init() called");
+    
+    #[cfg(not(test))]
+    {
+        // Check if already initialized
+        if OPERATIONS.get().is_some() {
+            return device_result_to_error(Ok(()));
+        }
+
+        // Create a runtime for async operations
+        let rt = match Runtime::new() {
+            Ok(rt) => rt,
+            Err(_) => return FN_ERR_BAD_CMD,
+        };
+        
+        // Create the platform-specific network manager
+        let manager = create_network_manager();
+        
+        // Create operations context with runtime
+        let context = OperationsContext::new_with_runtime(manager, rt);
+        let ops = Arc::new(context);
+
+        if OPERATIONS.set(ops).is_err() {
+            println!("network_init() failed: already initialized");
+            return FN_ERR_BAD_CMD;
+        }
+    }
+
+    device_result_to_error(Ok(()))
+}
+
 // Get the appropriate operations context
-fn get_operations() -> Arc<dyn NetworkOperations> {
+fn get_operations() -> Option<Arc<dyn NetworkOperations>> {
     #[cfg(test)]
     {
-        // Safety: We know this pointer is valid because:
-        // 1. Tests are serialized with #[serial]
-        // 2. We always set it before use in setup_test_context
-        // 3. The Arc ensures the data lives long enough
-        unsafe {
-            (*TEST_OPERATIONS.load(Ordering::SeqCst)).clone()
+        let ptr = TEST_OPERATIONS.load(Ordering::SeqCst);
+        if ptr.is_null() {
+            None
+        } else {
+            // Safety: We know this pointer is valid because:
+            // 1. Tests are serialized with #[serial]
+            // 2. We always set it before use in setup_test_context
+            // 3. The Arc ensures the data lives long enough
+            Some(unsafe { (*ptr).clone() })
         }
     }
     #[cfg(not(test))]
     {
-        OPERATIONS.get_or_init(|| {
-            println!("Creating new operations context...");
-            Arc::new(OperationsContext::<NetworkManagerImpl>::default())
-        }).clone()
+        OPERATIONS.get().map(|ops| ops.clone())
     }
-}
-
-#[no_mangle]
-pub extern "C" fn network_init() -> u8 {
-    println!("network_init() called");
-    // Initialize operations context
-    let _ = get_operations();
-    device_result_to_error(Ok(()))
 }
 
 #[no_mangle]
 pub extern "C" fn network_open(devicespec: *const c_char, mode: u8, trans: u8) -> u8 {
     println!("network_open() called with mode={}, trans={}", mode, trans);
+    
+    // Get operations context first
+    let Some(ops) = get_operations() else {
+        println!("network_open() failed: not initialized");
+        return FN_ERR_NOT_INITIALIZED;
+    };
     
     // Validate devicespec pointer
     if devicespec.is_null() {
@@ -107,8 +140,7 @@ pub extern "C" fn network_open(devicespec: *const c_char, mode: u8, trans: u8) -
         translation: trans,
     };
 
-    // Get operations context and open device
-    let ops = get_operations();
+    // Open device
     let result = ops.open_device(request);
     println!("network_open() result: {:?}", result);
     adapter_result_to_ffi(result)
@@ -116,6 +148,11 @@ pub extern "C" fn network_open(devicespec: *const c_char, mode: u8, trans: u8) -
 
 #[no_mangle]
 pub extern "C" fn network_http_post(devicespec: *const c_char, data: *const c_char) -> u8 {
+    // Get operations context first
+    let Some(ops) = get_operations() else {
+        return FN_ERR_NOT_INITIALIZED;
+    };
+
     // Validate pointers
     if devicespec.is_null() || data.is_null() {
         return FN_ERR_BAD_CMD;
@@ -138,8 +175,7 @@ pub extern "C" fn network_http_post(devicespec: *const c_char, data: *const c_ch
         data,
     };
 
-    // Get operations context and perform HTTP POST
-    let ops = get_operations();
+    // Perform HTTP POST
     adapter_result_to_ffi(ops.http_post(request))
 }
 
@@ -151,13 +187,14 @@ mod tests {
     use crate::adapters::{common::network::test_mocks::TestNetworkManager, ffi::FN_ERR_OK};
 
     fn setup_test_context(manager: TestNetworkManager) {
-        // Create new Arc with explicit trait object
-        let ops: Arc<dyn NetworkOperations> = Arc::new(OperationsContext::new(manager));
-        // Box the Arc trait object
+        // Create a runtime for async operations
+        let rt = Runtime::new().expect("Failed to create runtime");
+        
+        // Create operations context with runtime
+        let context = OperationsContext::new_with_runtime(manager, rt);
+        let ops: Arc<dyn NetworkOperations> = Arc::new(context);
         let ops = Box::new(ops);
-        // Get raw pointer to the Arc trait object
         let ptr = Box::into_raw(ops);
-        // Store the pointer, replacing any previous value
         TEST_OPERATIONS.store(ptr, Ordering::SeqCst);
     }
 
