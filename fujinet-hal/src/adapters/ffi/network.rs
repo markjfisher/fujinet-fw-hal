@@ -62,6 +62,7 @@ fn get_operations() -> Arc<dyn NetworkOperations> {
     #[cfg(not(test))]
     {
         OPERATIONS.get_or_init(|| {
+            println!("Creating new operations context...");
             Arc::new(OperationsContext::<NetworkManagerImpl>::default())
         }).clone()
     }
@@ -69,6 +70,7 @@ fn get_operations() -> Arc<dyn NetworkOperations> {
 
 #[no_mangle]
 pub extern "C" fn network_init() -> u8 {
+    println!("network_init() called");
     // Initialize operations context
     let _ = get_operations();
     device_result_to_error(Ok(()))
@@ -76,16 +78,25 @@ pub extern "C" fn network_init() -> u8 {
 
 #[no_mangle]
 pub extern "C" fn network_open(devicespec: *const c_char, mode: u8, trans: u8) -> u8 {
+    println!("network_open() called with mode={}, trans={}", mode, trans);
+    
     // Validate devicespec pointer
     if devicespec.is_null() {
+        println!("network_open() failed: null devicespec");
         return FN_ERR_BAD_CMD;
     }
 
     // Convert C string to Rust string
     let device_spec = unsafe {
         match CStr::from_ptr(devicespec).to_str() {
-            Ok(s) => s.to_string(),
-            Err(_) => return FN_ERR_BAD_CMD
+            Ok(s) => {
+                println!("network_open() devicespec: {}", s);
+                s.to_string()
+            },
+            Err(_) => {
+                println!("network_open() failed: invalid UTF-8 in devicespec");
+                return FN_ERR_BAD_CMD
+            }
         }
     };
 
@@ -98,7 +109,9 @@ pub extern "C" fn network_open(devicespec: *const c_char, mode: u8, trans: u8) -
 
     // Get operations context and open device
     let ops = get_operations();
-    adapter_result_to_ffi(ops.open_device(request))
+    let result = ops.open_device(request);
+    println!("network_open() result: {:?}", result);
+    adapter_result_to_ffi(result)
 }
 
 #[no_mangle]

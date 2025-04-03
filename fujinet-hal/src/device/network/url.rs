@@ -16,34 +16,45 @@ impl NetworkUrl {
     /// where x is an optional unit number 1-8 (defaults to 1)
     /// The network indicator (N) is case-insensitive
     pub fn parse(spec: &str) -> DeviceResult<Self> {
+        println!("NetworkUrl::parse() called with spec: {}", spec);
+
         // Parse N: prefix and unit number (case insensitive)
         if !spec.to_uppercase().starts_with('N') {
+            println!("NetworkUrl::parse() failed: missing N prefix");
             return Err(DeviceError::InvalidUrl);
         }
 
         // Extract unit number (N1-N8, or just N for N1)
         let (unit, rest) = if spec.len() > 1 && spec.chars().nth(1).unwrap().is_ascii_digit() {
             let unit = spec.chars().nth(1).unwrap().to_digit(10).unwrap() as u8;
+            println!("NetworkUrl::parse() explicit unit: {}", unit);
             // Validate unit is in range 1-8
             if unit < 1 || unit > 8 {
+                println!("NetworkUrl::parse() failed: invalid unit number");
                 return Err(DeviceError::InvalidUrl);
             }
             (unit, &spec[2..])
         } else {
+            println!("NetworkUrl::parse() using default unit: 1");
             (1, &spec[1..])
         };
 
         // Must start with colon
         if !rest.starts_with(':') {
+            println!("NetworkUrl::parse() failed: missing colon after unit");
             return Err(DeviceError::InvalidUrl);
         }
 
         let url = rest[1..].to_string();
-
+        println!("NetworkUrl::parse() url: {}", url);
+        
         // Parse and validate protocol from URL scheme
         let scheme = Self::extract_scheme(&url)?;
+        println!("NetworkUrl::parse() scheme: {}", scheme);
+        
         let protocol = NetworkProtocol::from_str(scheme)
             .ok_or(DeviceError::UnsupportedProtocol)?;
+        println!("NetworkUrl::parse() protocol: {:?}", protocol);
 
         Ok(Self { url, unit, protocol })
     }
@@ -51,6 +62,7 @@ impl NetworkUrl {
     fn extract_scheme(url: &str) -> DeviceResult<&str> {
         // URL must contain "://" to be valid
         if !url.contains("://") {
+            println!("extract_scheme() failed: missing ://");
             return Err(DeviceError::InvalidUrl);
         }
         

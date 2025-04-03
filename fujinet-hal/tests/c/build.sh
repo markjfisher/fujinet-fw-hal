@@ -16,8 +16,9 @@ else
     LINK_FLAGS="-lpthread -ldl"  # Unix/Linux specific libraries
 fi
 
+# Build the library version
+echo "Building library version..."
 # Build the library using the project's build script
-echo "Building library..."
 (cd "$ROOT_DIR" && ./build.sh $TARGET_FLAG)
 
 # Determine target directory from build.sh's mapping
@@ -32,11 +33,17 @@ BUILD_TYPE="release"
 echo "Copying static library..."
 cp "$ROOT_DIR/target/$TARGET/$BUILD_TYPE/libfujinet_hal.a" "$SCRIPT_DIR/"
 
-# Compile the test with static linking
-echo "Compiling test with static linking..."
+# Compile the library version
+echo "Compiling library version..."
 gcc -o http_test http_test.c -L. -l:libfujinet_hal.a $LINK_FLAGS
 
 # Clean up the copied library
 rm "$SCRIPT_DIR/libfujinet_hal.a"
 
-echo "Build complete. Run with: ./http_test" 
+# Build the debug version
+echo "Building debug version..."
+gcc -o http_test_debug http_test.c fujinet-network.c
+
+echo "Build complete. Run either:"
+echo "  Library version: ./http_test"
+echo "  Debug version: ./http_test_debug"

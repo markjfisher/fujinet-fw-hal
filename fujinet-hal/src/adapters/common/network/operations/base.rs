@@ -7,16 +7,21 @@ use crate::device::network::manager::NetworkManager;
 impl<M: NetworkManager> OperationsContext<M> {
     /// Open a network device
     pub fn open_device(&self, request: DeviceOpenRequest) -> Result<usize, AdapterError> {
+        println!("OperationsContext::open_device() called with spec: {}", request.device_spec);
         let mut manager = self.manager.lock().unwrap();
+        
         // Parse and validate the device specification
-        let (device_id, _url) = manager.parse_device_spec(&request.device_spec)
-            .map_err(|_| AdapterError::InvalidDeviceSpec)?;
+        let parse_result = manager.parse_device_spec(&request.device_spec);
+        println!("parse_device_spec result: {:?}", parse_result);
+        
+        let (device_id, _url) = parse_result.map_err(|_| AdapterError::InvalidDeviceSpec)?;
 
         // Create runtime and execute open_device
         let rt = Runtime::new().unwrap();
-        rt.block_on(manager.open_device(&request.device_spec, request.mode, request.translation))
-            .map_err(AdapterError::from)?;
-
+        let open_result = rt.block_on(manager.open_device(&request.device_spec, request.mode, request.translation));
+        println!("open_device result: {:?}", open_result);
+        
+        open_result.map_err(AdapterError::from)?;
         Ok(device_id)
     }
 
