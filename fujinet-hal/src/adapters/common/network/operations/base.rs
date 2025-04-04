@@ -32,10 +32,34 @@ impl<M: NetworkManager> OperationsContext<M> {
             .map_err(AdapterError::from)?;
 
         if !closed {
-            return Err(AdapterError::DeviceError(DeviceError::InvalidUrl));
+            return Err(AdapterError::DeviceError(DeviceError::IoError("Failed to close device".into())));
         }
 
         Ok(())
+    }
+
+    /// Validate that a device spec matches what was used in open_device
+    pub fn validate_device_spec(&self, spec: &str) -> Result<usize, AdapterError> {
+        let mut manager = self.manager.lock().unwrap();
+        
+        // Parse device spec to get ID and URL
+        let (id, url) = manager.parse_device_spec(spec)
+            .map_err(|_| AdapterError::InvalidDeviceSpec)?;
+
+        // Get device state
+        let device_state = manager.get_device(id)
+            .ok_or_else(|| AdapterError::DeviceError(DeviceError::InvalidUrl))?;
+
+        // Get stored URL
+        let stored_url = device_state.url.as_ref()
+            .ok_or_else(|| AdapterError::DeviceError(DeviceError::NotReady))?;
+
+        // Validate URLs match exactly
+        if url.url != stored_url.url {
+            return Err(AdapterError::DeviceError(DeviceError::InvalidUrl));
+        }
+
+        Ok(id)
     }
 }
 
@@ -43,6 +67,7 @@ impl<M: NetworkManager> OperationsContext<M> {
 mod tests {
     use super::*;
     use crate::adapters::common::network::test_mocks::TestNetworkManager;
+    use crate::device::network::url::NetworkUrl;
 
     #[test]
     fn test_open_device_success() {
@@ -114,6 +139,67 @@ mod tests {
         let context = OperationsContext::new(manager);
         let result = context.close_device(1);
         assert!(result.is_err());
+        if let AdapterError::DeviceError(DeviceError::IoError(msg)) = result.unwrap_err() {
+            assert_eq!(msg, "Failed to close device");
+        } else {
+            panic!("Expected IoError");
+        }
+    }
+
+    #[test]
+    fn test_validate_device_spec_success() {
+        let manager = TestNetworkManager::new()
+            .with_parse_result(1, "N1:http://test.com")
+            .with_device_state(1, NetworkUrl::parse("N1:http://test.com").unwrap());
+
+        let context = OperationsContext::new(manager);
+        let result = context.validate_device_spec("N1:http://test.com");
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), 1);
+    }
+
+    #[test]
+    fn test_validate_device_spec_invalid_spec() {
+        let manager = TestNetworkManager::new();  // No parse result set = invalid spec
+        let context = OperationsContext::new(manager);
+        let result = context.validate_device_spec("invalid");
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), AdapterError::InvalidDeviceSpec));
+    }
+
+    #[test]
+    fn test_validate_device_spec_device_not_found() {
+        let manager = TestNetworkManager::new()
+            .with_parse_result(1, "N1:http://test.com");
+            // No device state set = device not found
+
+        let context = OperationsContext::new(manager);
+        let result = context.validate_device_spec("N1:http://test.com");
+        assert!(result.is_err());
         assert!(matches!(result.unwrap_err(), AdapterError::DeviceError(DeviceError::InvalidUrl)));
+    }
+
+    #[test]
+    fn test_validate_device_spec_url_mismatch() {
+        let manager = TestNetworkManager::new()
+            .with_parse_result(1, "N1:http://test.com")
+            .with_device_state(1, NetworkUrl::parse("N1:http://different.com").unwrap());
+
+        let context = OperationsContext::new(manager);
+        let result = context.validate_device_spec("N1:http://test.com");
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), AdapterError::DeviceError(DeviceError::InvalidUrl)));
+    }
+
+    #[test]
+    fn test_validate_device_spec_no_url() {
+        let manager = TestNetworkManager::new()
+            .with_parse_result(1, "N1:http://test.com")
+            .with_device_state_no_url(1);  // Device exists but has no URL set
+
+        let context = OperationsContext::new(manager);
+        let result = context.validate_device_spec("N1:http://test.com");
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), AdapterError::DeviceError(DeviceError::NotReady)));
     }
 } 

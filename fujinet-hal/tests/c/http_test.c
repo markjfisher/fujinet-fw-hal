@@ -47,6 +47,20 @@ char *create_url(char *method) {
 //     printf("Response:\n%s\n", response_buffer);
 // }
 
+int8_t do_open() {
+    // Open the network
+    int8_t result;
+
+    printf("Opening network...\n");
+    result = network_open(url, OPEN_MODE_HTTP_GET, OPEN_TRANS_NONE);
+    if (result != FN_ERR_OK) {
+        print_error("network_open", result);
+        return 1;
+    }
+    printf("Network opened successfully\n");
+    return result;
+}
+
 int main() {
     uint8_t result;
     int16_t bytes_read;
@@ -67,24 +81,15 @@ int main() {
     }
     printf("Network initialized successfully\n");
 
-    // After network_init() success:
-    printf("URL being passed: ");
-    for(int i = 0; i < strlen(httpbin); i++) {
-        printf("%02X ", (unsigned char)httpbin[i]);
-    }
-    printf("\n");
-
     // Open the network
-    printf("Opening network...\n");
-    result = network_open(httpbin, OPEN_MODE_HTTP_GET, OPEN_TRANS_NONE);
+    url = create_url("get?a=1&b=2");
+    result = do_open(url);
     if (result != FN_ERR_OK) {
-        print_error("network_open", result);
+        print_error("open", result);
         return 1;
     }
-    printf("Network opened successfully\n");
 
     // Test HTTP GET
-    url = create_url("get?a=1&b=2");
     printf("Performing HTTP GET to %s...\n", url);
     bytes_read = network_http_get(url, response_buffer, sizeof(response_buffer));
     if (bytes_read < 0) {
@@ -93,6 +98,14 @@ int main() {
     }
     printf("HTTP GET successful, received %d bytes\n", bytes_read);
     printf("Response:\n%s\n", response_buffer);
+
+    // Close the network
+    result = network_close(url);
+    if (result != FN_ERR_OK) {
+        print_error("network_close", result);
+        return 1;
+    }
+    printf("Network closed successfully\n");
 
     // // Test HTTP POST
     // post_url = create_url("post");

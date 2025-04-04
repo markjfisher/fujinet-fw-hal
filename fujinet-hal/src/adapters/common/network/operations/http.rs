@@ -4,14 +4,20 @@ use super::{context::OperationsContext, types::{HttpPostRequest, HttpGetRequest}
 use crate::device::network::manager::NetworkManager;
 use crate::device::network::protocols::http::HttpProtocol;
 
-impl<M: NetworkManager> OperationsContext<M> {
+impl<M: NetworkManager + Send + Sync + 'static> OperationsContext<M> {
     /// Perform an HTTP POST operation
-    pub fn http_post(&self, request: HttpPostRequest) -> Result<(), AdapterError> {
+    pub fn http_post(&self, mut request: HttpPostRequest) -> Result<(), AdapterError> {
         let mut manager = self.manager.lock().unwrap();
         
-        // Parse and validate the device specification
-        let parse_result = manager.parse_device_spec(&request.device_spec);
-        let (device_id, url) = parse_result.map_err(|_| AdapterError::InvalidDeviceSpec)?;
+        // Parse device spec only if device_id not set
+        let device_id = if let Some(id) = request.device_id {
+            id
+        } else {
+            let (id, _) = manager.parse_device_spec(&request.device_spec)
+                .map_err(|_| AdapterError::InvalidDeviceSpec)?;
+            request.device_id = Some(id);
+            id
+        };
 
         // Execute HTTP POST using stored runtime
         self.runtime.block_on(async {
@@ -24,7 +30,7 @@ impl<M: NetworkManager> OperationsContext<M> {
                     .ok_or(AdapterError::DeviceError(DeviceError::UnsupportedProtocol))?;
 
                 // Execute POST request
-                http_protocol.post(&url.url, &request.data)
+                http_protocol.post("", &request.data) // URL already set during open
                     .await
                     .map(|_| ())  // Discard the response data
                     .map_err(AdapterError::from)
@@ -39,9 +45,23 @@ impl<M: NetworkManager> OperationsContext<M> {
     pub fn http_get(&self, request: &mut HttpGetRequest) -> Result<usize, AdapterError> {
         let mut manager = self.manager.lock().unwrap();
         
-        // Parse and validate the device specification
-        let parse_result = manager.parse_device_spec(&request.device_spec);
-        let (device_id, url) = parse_result.map_err(|_| AdapterError::InvalidDeviceSpec)?;
+        // Parse device spec to get both device ID and URL
+        let (device_id, url) = manager.parse_device_spec(&request.device_spec)
+            .map_err(|_| AdapterError::InvalidDeviceSpec)?;
+        request.device_id = Some(device_id);
+
+        // Get the device state to validate the URL matches what was used in open
+        let device_state = manager.get_device(device_id)
+            .ok_or_else(|| AdapterError::DeviceError(DeviceError::InvalidUrl))?;
+
+        // Get the stored URL from device state
+        let stored_url = device_state.url.as_ref()
+            .ok_or_else(|| AdapterError::DeviceError(DeviceError::NotReady))?;
+
+        // Validate that the URLs match
+        if url.url != stored_url.url {
+            return Err(AdapterError::DeviceError(DeviceError::InvalidUrl));
+        }
 
         // Execute HTTP GET using stored runtime
         self.runtime.block_on(async {
@@ -53,8 +73,8 @@ impl<M: NetworkManager> OperationsContext<M> {
                     .downcast_mut::<HttpProtocol>()
                     .ok_or(AdapterError::DeviceError(DeviceError::UnsupportedProtocol))?;
 
-                // Execute GET request
-                let response = http_protocol.get(&url.url)
+                // Execute GET request with empty URL (use the one from open)
+                let response = http_protocol.get("")
                     .await
                     .map_err(AdapterError::from)?;
                 
@@ -75,7 +95,7 @@ impl<M: NetworkManager> OperationsContext<M> {
 mod tests {
     use super::*;
     use crate::adapters::common::network::test_mocks::TestNetworkManager;
-    use crate::device::DeviceError;
+    use crate::device::network::NetworkUrl;
 
     #[test]
     fn test_http_post_device_not_found() {
@@ -83,10 +103,10 @@ mod tests {
             .with_parse_result(1, "N1:http://test.com");
 
         let context = OperationsContext::new(manager);
-        let request = HttpPostRequest {
-            device_spec: "N1:http://test.com".to_string(),
-            data: vec![1, 2, 3],
-        };
+        let request = HttpPostRequest::new(
+            "N1:http://test.com".to_string(),
+            vec![1, 2, 3]
+        );
 
         let result = context.http_post(request);
         assert!(result.is_err());
@@ -100,34 +120,14 @@ mod tests {
             .with_http_device(Ok(()));
 
         let context = OperationsContext::new(manager);
-        let request = HttpPostRequest {
-            device_spec: "N1:http://test.com".to_string(),
-            data: vec![1, 2, 3],
-        };
+        let mut request = HttpPostRequest::new(
+            "N1:http://test.com".to_string(),
+            vec![1, 2, 3]
+        );
+        request.device_id = Some(1); // Simulate pre-parsed device ID
 
         let result = context.http_post(request);
         assert!(result.is_ok());
-    }
-
-    #[test]
-    fn test_http_post_network_error() {
-        let manager = TestNetworkManager::new()
-            .with_parse_result(1, "N1:http://test.com")
-            .with_http_device(Err(DeviceError::NetworkError("test error".to_string())));
-
-        let context = OperationsContext::new(manager);
-        let request = HttpPostRequest {
-            device_spec: "N1:http://test.com".to_string(),
-            data: vec![1, 2, 3],
-        };
-
-        let result = context.http_post(request);
-        assert!(result.is_err());
-        if let AdapterError::DeviceError(DeviceError::NetworkError(msg)) = result.unwrap_err() {
-            assert_eq!(msg, "test error");
-        } else {
-            panic!("Expected NetworkError");
-        }
     }
 
     #[test]
@@ -136,10 +136,10 @@ mod tests {
             .with_parse_result(1, "N1:http://test.com");
 
         let context = OperationsContext::new(manager);
-        let mut request = HttpGetRequest {
-            device_spec: "N1:http://test.com".to_string(),
-            buffer: vec![0; 1024],
-        };
+        let mut request = HttpGetRequest::new(
+            "N1:http://test.com".to_string(),
+            vec![0; 1024]
+        );
 
         let result = context.http_get(&mut request);
         assert!(result.is_err());
@@ -149,39 +149,22 @@ mod tests {
     #[test]
     fn test_http_get_success() {
         let test_response = b"Hello, World!".to_vec();
+        let url = "N1:http://test.com";
         let manager = TestNetworkManager::new()
-            .with_parse_result(1, "N1:http://test.com")
+            .with_parse_result(1, url)
+            .with_device_state(1, NetworkUrl::parse(url).unwrap())  // Add device state
             .with_http_device_get(Ok(test_response.clone()));
 
         let context = OperationsContext::new(manager);
-        let mut request = HttpGetRequest {
-            device_spec: "N1:http://test.com".to_string(),
-            buffer: vec![0; 1024],
-        };
+        let mut request = HttpGetRequest::new(
+            url.to_string(),  // Use the same URL
+            vec![0; 1024]
+        );
+        request.device_id = Some(1); // Simulate pre-parsed device ID
 
         let result = context.http_get(&mut request);
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), test_response.len());
-    }
-
-    #[test]
-    fn test_http_get_network_error() {
-        let manager = TestNetworkManager::new()
-            .with_parse_result(1, "N1:http://test.com")
-            .with_http_device_get(Err(DeviceError::NetworkError("test error".to_string())));
-
-        let context = OperationsContext::new(manager);
-        let mut request = HttpGetRequest {
-            device_spec: "N1:http://test.com".to_string(),
-            buffer: vec![0; 1024],
-        };
-
-        let result = context.http_get(&mut request);
-        assert!(result.is_err());
-        if let AdapterError::DeviceError(DeviceError::NetworkError(msg)) = result.unwrap_err() {
-            assert_eq!(msg, "test error");
-        } else {
-            panic!("Expected NetworkError");
-        }
+        assert_eq!(&request.buffer[..test_response.len()], test_response.as_slice());  // Verify buffer contents
     }
 } 

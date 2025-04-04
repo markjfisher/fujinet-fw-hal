@@ -20,28 +20,47 @@ use crate::adapters::ffi::error::{
     adapter_result_to_ffi,
     FN_ERR_BAD_CMD,
     FN_ERR_NOT_INITIALIZED,
+    FN_ERR_OK,
 };
 use crate::device::network::manager::NetworkManager;
 
 // Trait to abstract over different OperationsContext types
 trait NetworkOperations: Send + Sync {
     fn open_device(&self, request: DeviceOpenRequest) -> Result<usize, AdapterError>;
+    fn close_device(&self, device_id: usize) -> Result<(), AdapterError>;
     fn http_post(&self, request: HttpPostRequest) -> Result<(), AdapterError>;
     fn http_get(&self, request: &mut HttpGetRequest) -> Result<usize, AdapterError>;
+    fn parse_device_spec(&self, spec: &str) -> Result<usize, AdapterError>;
+    fn validate_device_spec(&self, spec: &str) -> Result<usize, AdapterError>;
 }
 
 // Implement NetworkOperations for any OperationsContext with a NetworkManager
 impl<M: NetworkManager + Send + Sync + 'static> NetworkOperations for OperationsContext<M> {
     fn open_device(&self, request: DeviceOpenRequest) -> Result<usize, AdapterError> {
-        self.open_device(request)
+        OperationsContext::open_device(self, request)
+    }
+
+    fn close_device(&self, device_id: usize) -> Result<(), AdapterError> {
+        OperationsContext::close_device(self, device_id)
     }
 
     fn http_post(&self, request: HttpPostRequest) -> Result<(), AdapterError> {
-        self.http_post(request)
+        OperationsContext::http_post(self, request)
     }
 
     fn http_get(&self, request: &mut HttpGetRequest) -> Result<usize, AdapterError> {
-        self.http_get(request)
+        OperationsContext::http_get(self, request)
+    }
+
+    fn parse_device_spec(&self, spec: &str) -> Result<usize, AdapterError> {
+        let manager = self.manager.lock().unwrap();
+        manager.parse_device_spec(spec)
+            .map(|(id, _)| id)
+            .map_err(|_| AdapterError::InvalidDeviceSpec)
+    }
+
+    fn validate_device_spec(&self, spec: &str) -> Result<usize, AdapterError> {
+        OperationsContext::validate_device_spec(self, spec)
     }
 }
 
@@ -153,77 +172,98 @@ pub extern "C" fn network_open(devicespec: *const c_char, mode: u8, trans: u8) -
 
 #[no_mangle]
 pub extern "C" fn network_http_post(devicespec: *const c_char, data: *const c_char) -> u8 {
-    // Get operations context first
-    let Some(ops) = get_operations() else {
-        return FN_ERR_NOT_INITIALIZED;
-    };
-
     // Validate pointers
     if devicespec.is_null() || data.is_null() {
         return FN_ERR_BAD_CMD;
     }
 
+    // Get operations context
+    let Some(ops) = get_operations() else {
+        return FN_ERR_BAD_CMD;
+    };
+
     // Convert C strings to Rust strings
     let (device_spec, data) = unsafe {
-        match (
-            CStr::from_ptr(devicespec).to_str(),
-            CStr::from_ptr(data).to_str()
-        ) {
+        match (CStr::from_ptr(devicespec).to_str(), CStr::from_ptr(data).to_str()) {
             (Ok(d), Ok(p)) => (d.to_string(), p.as_bytes().to_vec()),
-            _ => return FN_ERR_BAD_CMD
+            _ => return FN_ERR_BAD_CMD,
         }
     };
 
-    // Create the request
-    let request = HttpPostRequest {
-        device_spec,
-        data,
+    // Parse device spec once at the FFI layer
+    let device_id = match ops.parse_device_spec(&device_spec) {
+        Ok(id) => id,
+        Err(_) => return FN_ERR_BAD_CMD,
     };
 
+    // Create the request
+    let mut request = HttpPostRequest::new(device_spec, data);
+    request.device_id = Some(device_id);
+
     // Perform HTTP POST
-    adapter_result_to_ffi(ops.http_post(request))
+    match ops.http_post(request) {
+        Ok(_) => FN_ERR_OK,
+        Err(e) => adapter_result_to_ffi::<()>(Err(e)),
+    }
 }
 
 #[no_mangle]
-pub extern "C" fn network_http_get(devicespec: *const c_char, buf: *mut u8, len: u16) -> i16 {
-    // Get operations context first
-    let Some(ops) = get_operations() else {
-        return -(FN_ERR_NOT_INITIALIZED as i16)
-    };
-
+pub extern "C" fn network_http_get(device_spec: *const c_char, buf: *mut u8, len: u16) -> i16 {
     // Validate pointers
-    if devicespec.is_null() || buf.is_null() {
-        return -(FN_ERR_BAD_CMD as i16)
+    if device_spec.is_null() || buf.is_null() {
+        return -(FN_ERR_BAD_CMD as i16);
     }
 
+    // Get operations context
+    let Some(ops) = get_operations() else {
+        return -(FN_ERR_BAD_CMD as i16);
+    };
+
     // Convert C string to Rust string
-    let device_spec = unsafe {
-        match CStr::from_ptr(devicespec).to_str() {
-            Ok(d) => d.to_string(),
-            _ => return -(FN_ERR_BAD_CMD as i16)
-        }
+    let device_spec_str = match unsafe { CStr::from_ptr(device_spec) }.to_str() {
+        Ok(s) => s.to_string(),
+        Err(_) => return -(FN_ERR_BAD_CMD as i16),
     };
 
-    // Create a buffer to store the response
+    // Validate device spec matches what was used in open
+    let device_id = match ops.validate_device_spec(&device_spec_str) {
+        Ok(id) => id,
+        Err(_) => return -(FN_ERR_BAD_CMD as i16),
+    };
+
+    // Create buffer for response
     let buffer = vec![0u8; len as usize];
-
-    // Create the request
-    let mut request = HttpGetRequest {
-        device_spec,
-        buffer,
-    };
+    let mut request = HttpGetRequest::new(device_spec_str, buffer);
+    request.device_id = Some(device_id);
 
     // Perform HTTP GET
     match ops.http_get(&mut request) {
         Ok(bytes_read) => {
-            // Copy the response data back to the provided buffer
+            // Copy response to output buffer
             unsafe {
                 std::ptr::copy_nonoverlapping(request.buffer.as_ptr(), buf, bytes_read);
             }
             bytes_read as i16
-        },
-        Err(e) => -(adapter_result_to_ffi::<()>(Err(e)) as i16)
+        }
+        Err(_) => -(FN_ERR_BAD_CMD as i16),
     }
+}
+
+// Add network_close FFI function
+#[no_mangle]
+pub extern "C" fn network_close(device_id: u8) -> u8 {
+    println!("network_close() called with device_id={}", device_id);
+    
+    // Get operations context
+    let Some(ops) = get_operations() else {
+        println!("network_close() failed: not initialized");
+        return FN_ERR_NOT_INITIALIZED;
+    };
+
+    // Close device
+    let result = ops.close_device(device_id as usize);
+    println!("network_close() result: {:?}", result);
+    adapter_result_to_ffi(result)
 }
 
 #[cfg(test)]
@@ -231,8 +271,9 @@ mod tests {
     use super::*;
     use std::ffi::CString;
     use serial_test::serial;
-    use crate::adapters::{common::network::test_mocks::TestNetworkManager, ffi::FN_ERR_OK};
+    use crate::adapters::{common::network::test_mocks::TestNetworkManager, ffi::{FN_ERR_OK, FN_ERR_IO_ERROR}};
     use crate::device::DeviceError;
+    use crate::device::network::NetworkUrl;
 
     fn setup_test_context(manager: TestNetworkManager) {
         // Create a runtime for async operations
@@ -246,9 +287,19 @@ mod tests {
         TEST_OPERATIONS.store(ptr, Ordering::SeqCst);
     }
 
+    fn cleanup_test_context() {
+        let ptr = TEST_OPERATIONS.swap(std::ptr::null_mut(), Ordering::SeqCst);
+        if !ptr.is_null() {
+            unsafe {
+                drop(Box::from_raw(ptr));
+            }
+        }
+    }
+
     #[test]
     #[serial]
     fn test_network_init() {
+        cleanup_test_context();
         let manager = TestNetworkManager::new()
             .with_parse_result(1, "N1:http://test.com")
             .with_open_result(true);
@@ -366,16 +417,19 @@ mod tests {
     #[serial]
     fn test_http_get_success() {
         let test_response = b"Hello, World!".to_vec();
+        let url = "N1:http://test.com";
         let manager = TestNetworkManager::new()
-            .with_parse_result(1, "N1:http://test.com")
+            .with_parse_result(1, url)
+            .with_device_state(1, NetworkUrl::parse(url).unwrap())
             .with_http_device_get(Ok(test_response.clone()));
         setup_test_context(manager);
 
-        let url = CString::new("N1:http://test.com").unwrap();
+        let url = CString::new(url).unwrap();
         let mut buffer = [0u8; 1024];
         let result = network_http_get(url.as_ptr(), buffer.as_mut_ptr(), 1024);
         assert!(result > 0);
         assert_eq!(result as usize, test_response.len());
+        assert_eq!(&buffer[..test_response.len()], test_response.as_slice());
     }
 
     #[test]
@@ -403,5 +457,35 @@ mod tests {
         let mut buffer = [0u8; 1024];
         let result = network_http_get(url.as_ptr(), buffer.as_mut_ptr(), 1024);
         assert!(result < 0);
+    }
+
+    #[test]
+    #[serial]
+    fn test_network_close_success() {
+        cleanup_test_context();
+        let manager = TestNetworkManager::new()
+            .with_close_result(true);
+        setup_test_context(manager);
+
+        assert_eq!(network_close(1), FN_ERR_OK);
+    }
+
+    #[test]
+    #[serial]
+    fn test_network_close_not_initialized() {
+        cleanup_test_context();
+        assert_eq!(network_close(1), FN_ERR_NOT_INITIALIZED);
+    }
+
+    #[test]
+    #[serial]
+    fn test_network_close_failure() {
+        cleanup_test_context();
+        let manager = TestNetworkManager::new()
+            .with_close_result(false);
+        setup_test_context(manager);
+
+        assert_eq!(network_close(1), FN_ERR_IO_ERROR);
+        cleanup_test_context();
     }
 }

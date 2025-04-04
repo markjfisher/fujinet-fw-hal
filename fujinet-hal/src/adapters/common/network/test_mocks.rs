@@ -81,6 +81,7 @@ pub struct TestNetworkManager {
     open_result: bool,
     close_result: bool,
     device: Option<Box<dyn NetworkDevice>>,
+    device_states: HashMap<usize, DeviceState>,
 }
 
 #[async_trait]
@@ -111,8 +112,8 @@ impl NetworkManager for TestNetworkManager {
         Ok(None)
     }
 
-    fn get_device(&mut self, _device_id: usize) -> Option<&mut DeviceState> {
-        None
+    fn get_device(&mut self, device_id: usize) -> Option<&mut DeviceState> {
+        self.device_states.get_mut(&device_id)
     }
 
     async fn close_device(&mut self, _device_id: usize) -> DeviceResult<bool> {
@@ -131,11 +132,25 @@ impl TestNetworkManager {
             open_result: false,
             close_result: false,
             device: None,
+            device_states: HashMap::new(),
         }
     }
 
     pub fn with_parse_result(mut self, device_id: usize, url: &str) -> Self {
         self.parse_result = Some((device_id, NetworkUrl::parse(url).unwrap()));
+        self
+    }
+
+    pub fn with_device_state(mut self, device_id: usize, url: NetworkUrl) -> Self {
+        let mut state = DeviceState::default();
+        state.url = Some(url);
+        self.device_states.insert(device_id, state);
+        self
+    }
+
+    pub fn with_device_state_no_url(mut self, device_id: usize) -> Self {
+        let state = DeviceState::default();
+        self.device_states.insert(device_id, state);
         self
     }
 

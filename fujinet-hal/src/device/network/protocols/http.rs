@@ -36,27 +36,27 @@ impl HttpProtocol {
     pub async fn get(&mut self, url: &str) -> DeviceResult<Vec<u8>> {
         self.send_request("GET", url, &[]).await
     }
-
+    
     /// Perform HTTP POST request
     pub async fn post(&mut self, url: &str, body: &[u8]) -> DeviceResult<Vec<u8>> {
         self.send_request("POST", url, body).await
     }
-
+    
     /// Perform HTTP PUT request
     pub async fn put(&mut self, url: &str, body: &[u8]) -> DeviceResult<Vec<u8>> {
         self.send_request("PUT", url, body).await
     }
-
+    
     /// Perform HTTP DELETE request
     pub async fn delete(&mut self, url: &str) -> DeviceResult<Vec<u8>> {
         self.send_request("DELETE", url, &[]).await
     }
-
+    
     /// Perform HTTP HEAD request
     pub async fn head(&mut self, url: &str) -> DeviceResult<Vec<u8>> {
         self.send_request("HEAD", url, &[]).await
     }
-
+    
     /// Perform HTTP PATCH request
     pub async fn patch(&mut self, url: &str, body: &[u8]) -> DeviceResult<Vec<u8>> {
         self.send_request("PATCH", url, body).await
