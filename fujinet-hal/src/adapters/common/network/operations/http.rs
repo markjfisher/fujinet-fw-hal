@@ -58,8 +58,8 @@ impl<M: NetworkManager + Send + Sync + 'static> OperationsContext<M> {
         let stored_url = device_state.url.as_ref()
             .ok_or_else(|| AdapterError::DeviceError(DeviceError::NotReady))?;
 
-        // Validate that the URLs match
-        if url.url != stored_url.url {
+        // Validate that the base URLs match (host and port)
+        if !url.has_same_base_url(stored_url) {
             return Err(AdapterError::DeviceError(DeviceError::InvalidUrl));
         }
 
@@ -166,5 +166,26 @@ mod tests {
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), test_response.len());
         assert_eq!(&request.buffer[..test_response.len()], test_response.as_slice());  // Verify buffer contents
+    }
+
+    #[test]
+    fn test_http_get_with_different_path() {
+        let test_response = b"Hello, World!".to_vec();
+        let base_url = "N1:http://192.168.1.100:8085/";
+        let request_url = "N1:http://192.168.1.100:8085/get?a=1&b=2";
+        
+        let manager = TestNetworkManager::new()
+            .with_parse_result(1, base_url)
+            .with_parse_result(1, request_url)  // Add parsing for request URL
+            .with_device_state(1, NetworkUrl::parse(base_url).unwrap())
+            .with_http_device_get(Ok(test_response.clone()));
+
+        let context = OperationsContext::new(manager);
+        let mut request = HttpGetRequest::new(request_url.to_string(), vec![0; 1024]);
+        request.device_id = Some(1);
+
+        let result = context.http_get(&mut request);
+        assert!(result.is_ok(), "GET request with different path should succeed");
+        assert_eq!(result.unwrap(), test_response.len());
     }
 } 

@@ -80,6 +80,16 @@ impl NetworkUrl {
     pub fn protocol(&self) -> NetworkProtocol {
         self.protocol.clone()
     }
+
+    /// Check if two URLs have the same base (host and port)
+    pub fn has_same_base_url(&self, other: &NetworkUrl) -> bool {
+        // Extract base URL (scheme, host, port) by removing path and query
+        let self_base = self.url.split("://").nth(1).unwrap_or("").split('/').next().unwrap_or("");
+        let other_base = other.url.split("://").nth(1).unwrap_or("").split('/').next().unwrap_or("");
+        
+        // Also check that protocols match
+        self.protocol == other.protocol && self_base == other_base
+    }
 }
 
 #[cfg(test)]
@@ -190,5 +200,19 @@ mod tests {
             NetworkUrl::parse("N:example.com"),
             Err(DeviceError::InvalidUrl)
         ));
+    }
+
+    #[test]
+    fn test_has_same_base_url() {
+        let base = NetworkUrl::parse("N1:http://192.168.1.100:8085/").unwrap();
+        let same_base = NetworkUrl::parse("N1:http://192.168.1.100:8085/get?a=1&b=2").unwrap();
+        let same_base_no_slash = NetworkUrl::parse("N1:http://192.168.1.100:8085").unwrap();
+        let different_base = NetworkUrl::parse("N1:http://192.168.1.101:8085/").unwrap();
+        let different_port = NetworkUrl::parse("N1:http://192.168.1.100:8086/").unwrap();
+
+        assert!(base.has_same_base_url(&same_base), "URLs with same base but different paths should match");
+        assert!(base.has_same_base_url(&same_base_no_slash), "URLs with/without trailing slash should match");
+        assert!(!base.has_same_base_url(&different_base), "URLs with different hosts should not match");
+        assert!(!base.has_same_base_url(&different_port), "URLs with different ports should not match");
     }
 } 
